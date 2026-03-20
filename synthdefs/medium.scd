@@ -83,19 +83,22 @@ SynthDef(\med_noise_floor, { |out=0, level=(-40), color=0.5, filter=8000|
 }).store;
 
 // --- med_limiter ---
-// Carrying capacity — compresses/limits when too many agents are active.
+// Normalizing compressor/limiter.
 // threshold: level in dB above which compression kicks in
 // ratio: compression ratio (1=none, higher=more limiting)
-SynthDef(\med_limiter, { |in=0, out=0, threshold=(-6), ratio=4|
+// makeup: post-compression gain in dB (brings quiet biomes up)
+SynthDef(\med_limiter, { |in=0, out=0, threshold=(-12), ratio=4, makeup=6|
 	var sig = In.ar(in, 2);  // stereo at this point
 	// Compander as a compressor/limiter
 	sig = Compander.ar(sig, sig,
 		thresh: threshold.dbamp,
 		slopeBelow: 1,
 		slopeAbove: (1 / ratio.max(1)),
-		clampTime: 0.005,
-		relaxTime: 0.1
+		clampTime: 0.01,
+		relaxTime: 0.15
 	);
+	// Makeup gain
+	sig = sig * makeup.dbamp;
 	// Hard limiter safety net
 	sig = Limiter.ar(sig, 0.95, 0.01);
 	Out.ar(out, sig);

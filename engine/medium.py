@@ -111,7 +111,8 @@ class Medium:
                         add_action=ADD_TO_TAIL,
                         **{"in": 0, "out": 0},
                         threshold=spec.limiter_threshold,
-                        ratio=4)
+                        ratio=4,
+                        makeup=6)
         self.nodes.append(node)
         self._limiter_node = node
 

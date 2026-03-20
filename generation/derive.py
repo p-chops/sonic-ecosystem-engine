@@ -114,7 +114,7 @@ def derive_medium(dna: MacroDNA, rng: random.Random) -> MediumSpec:
         ),
         noise_floor_level=lerp(-60, -25, dna.density * 0.4),
         noise_floor_color=lerp(0, 1, 1 - dna.spectral_center),
-        limiter_threshold=lerp(-12, -3, 1 - dna.density),
+        limiter_threshold=-6,  # fixed — gain staging handles density, limiter is a safety net
     )
 
 

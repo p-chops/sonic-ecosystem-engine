@@ -20,6 +20,19 @@ def lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
 
 
+# Source-specific gain compensation. Values <1.0 for inherently loud sources,
+# >1.0 for quiet ones. Tuned by ear.
+_SOURCE_GAIN = {
+    "src_sine":    1.2,   # focused energy, needs a boost
+    "src_noise":   0.5,   # broadband, inherently loud
+    "src_click":   0.8,   # spiky transients
+    "src_fm":      1.0,   # reference level
+    "src_formant": 0.7,   # multiple resonant bands add up
+    "src_grain":   0.6,   # many overlapping grains
+    "src_string":  1.0,   # similar energy to FM
+}
+
+
 class Agent:
     """A single agent in the ecosystem. Owns a voice chain and delegates
     behavior to its archetype."""
@@ -45,9 +58,20 @@ class Agent:
         self.pos = rng.uniform(-1.0, 1.0)  # pan position
 
         # Depth-derived parameters
-        self.amp = lerp(0.4, 0.05, self.depth)
+        #
+        # Amplitude model:
+        #   Close agents are clearly audible, far agents are quiet texture.
+        #   Source gain compensates for inherent loudness differences.
+        #   The medium limiter normalizes total biome energy.
+        #
+        source_gain = _SOURCE_GAIN.get(species.chain_spec.source, 1.0)
+
+        base_amp = lerp(0.5, 0.03, self.depth)  # ~24dB foreground/background spread
+        self.amp = base_amp * source_gain
+
         if species.archetype == "drone":
             self.amp *= 0.3  # drones sit underneath
+
         self.send = lerp(0.1, 0.8, self.depth)
         self.activity_weight = lerp(1.0, 0.0, self.depth)
 
