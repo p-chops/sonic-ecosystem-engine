@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sonic-ecosystem-engine"
+version = "0.1.0"
+description = "Procedural soundscape generation modeled as sonic ecosystems"
+requires-python = ">=3.11"
+dependencies = [
+    "python-osc>=1.8.3",
+    "pyyaml>=6.0",
+    "websockets>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ipython",
+]
+
+[tool.setuptools.packages.find]
+include = ["engine*", "generation*", "curation*"]
