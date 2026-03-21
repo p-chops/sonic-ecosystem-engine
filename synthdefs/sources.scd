@@ -3,6 +3,12 @@
 // with doneAction: 2 (self-freeing), and accepts standard params:
 // out, freq, amp, decay.
 //
+// env_type selects envelope shape:
+//   0: perc — sharp attack, exponential decay
+//   1: swell — slow attack, quicker decay
+//   2: symmetric — sine-shaped
+//   3: sustained — linen with hold
+//
 // Evaluate this file in SuperCollider to compile all sources.
 // SynthDefs are written to SynthDef.synthDefDir (Platform.userAppSupportDir +/+ "synthdefs").
 
@@ -14,8 +20,12 @@
 // partial_spread controls inharmonicity (0=harmonic, higher=stretched).
 // partial_falloff controls amplitude rolloff per partial.
 SynthDef(\src_sine, { |out=0, freq=440, amp=0.1, decay=1,
-	n_partials=1, partial_spread=0, partial_falloff=0.7|
-	var env = EnvGen.kr(Env.perc(0.005, decay), doneAction: 2);
+	n_partials=1, partial_spread=0, partial_falloff=0.7, env_type=0|
+	var env0 = EnvGen.kr(Env.perc(0.005, decay), doneAction: 0);
+	var env1 = EnvGen.kr(Env.perc(decay * 0.6, decay * 0.4, 1, 4), doneAction: 0);
+	var env2 = EnvGen.kr(Env.sine(decay), doneAction: 0);
+	var env3 = EnvGen.kr(Env.linen(0.01, decay * 0.7, decay * 0.3), doneAction: 0);
+	var env = Select.kr(env_type.round, [env0, env1, env2, env3]);
 	// All 8 partials always run; n_partials gates which are audible
 	var sig = Mix.fill(8, { |i|
 		var partial_freq = freq * (i + 1) * (1 + (partial_spread * i * i * 0.01));
@@ -24,14 +34,19 @@ SynthDef(\src_sine, { |out=0, freq=440, amp=0.1, decay=1,
 	});
 	sig = sig * env * amp;
 	Out.ar(out, sig);
+	DetectSilence.ar(sig, doneAction: 2);
 }).store;
 
 // --- src_noise ---
 // Filtered noise with variable bandwidth.
 // noise_type: 0=white, 1=pink, 2=crackle, 3=dust
 SynthDef(\src_noise, { |out=0, freq=1000, amp=0.1, decay=1,
-	center_freq=1000, bandwidth=400, noise_type=0|
-	var env = EnvGen.kr(Env.perc(0.01, decay), doneAction: 2);
+	center_freq=1000, bandwidth=400, noise_type=0, env_type=0|
+	var env0 = EnvGen.kr(Env.perc(0.005, decay), doneAction: 0);
+	var env1 = EnvGen.kr(Env.perc(decay * 0.6, decay * 0.4, 1, 4), doneAction: 0);
+	var env2 = EnvGen.kr(Env.sine(decay), doneAction: 0);
+	var env3 = EnvGen.kr(Env.linen(0.01, decay * 0.7, decay * 0.3), doneAction: 0);
+	var env = Select.kr(env_type.round, [env0, env1, env2, env3]);
 	var noise = Select.ar(noise_type.round, [
 		WhiteNoise.ar,
 		PinkNoise.ar,
@@ -41,14 +56,19 @@ SynthDef(\src_noise, { |out=0, freq=1000, amp=0.1, decay=1,
 	var sig = BPF.ar(noise, center_freq.clip(20, 20000), (bandwidth / center_freq.max(1)).clip(0.01, 2));
 	sig = sig * env * amp;
 	Out.ar(out, sig);
+	DetectSilence.ar(sig, doneAction: 2);
 }).store;
 
 // --- src_click ---
 // Short impulse through a resonant filter.
 // impulse_type: 0=single impulse, 1=short burst, 2=dust
 SynthDef(\src_click, { |out=0, freq=440, amp=0.1, decay=0.3,
-	reson_freq=800, reson_q=10, impulse_type=0|
-	var env = EnvGen.kr(Env.perc(0.001, decay), doneAction: 2);
+	reson_freq=800, reson_q=10, impulse_type=0, env_type=0|
+	var env0 = EnvGen.kr(Env.perc(0.005, decay), doneAction: 0);
+	var env1 = EnvGen.kr(Env.perc(decay * 0.6, decay * 0.4, 1, 4), doneAction: 0);
+	var env2 = EnvGen.kr(Env.sine(decay), doneAction: 0);
+	var env3 = EnvGen.kr(Env.linen(0.01, decay * 0.7, decay * 0.3), doneAction: 0);
+	var env = Select.kr(env_type.round, [env0, env1, env2, env3]);
 	var impulse = Select.ar(impulse_type.round, [
 		Impulse.ar(0),  // single impulse at synth start
 		Impulse.ar(0) * WhiteNoise.ar,  // noise burst
@@ -57,6 +77,7 @@ SynthDef(\src_click, { |out=0, freq=440, amp=0.1, decay=0.3,
 	var sig = Ringz.ar(impulse, reson_freq.clip(20, 20000), decay, amp);
 	sig = sig * env;
 	Out.ar(out, sig);
+	DetectSilence.ar(sig, doneAction: 2);
 }).store;
 
 // --- src_fm ---
@@ -65,13 +86,18 @@ SynthDef(\src_click, { |out=0, freq=440, amp=0.1, decay=0.3,
 // index: modulation depth
 // index_env_amount: how much the index decays with the envelope (0=static, 1=full decay)
 SynthDef(\src_fm, { |out=0, freq=440, amp=0.1, decay=1,
-	ratio=1.5, index=3, index_env_amount=0.5|
-	var env = EnvGen.kr(Env.perc(0.005, decay), doneAction: 2);
+	ratio=1.5, index=3, index_env_amount=0.5, env_type=0|
+	var env0 = EnvGen.kr(Env.perc(0.005, decay), doneAction: 0);
+	var env1 = EnvGen.kr(Env.perc(decay * 0.6, decay * 0.4, 1, 4), doneAction: 0);
+	var env2 = EnvGen.kr(Env.sine(decay), doneAction: 0);
+	var env3 = EnvGen.kr(Env.linen(0.01, decay * 0.7, decay * 0.3), doneAction: 0);
+	var env = Select.kr(env_type.round, [env0, env1, env2, env3]);
 	var index_env = index * (1 - (index_env_amount * (1 - env)));
 	var mod_freq = freq * ratio;
 	var mod = SinOsc.ar(mod_freq) * mod_freq * index_env;
 	var sig = SinOsc.ar(freq + mod) * env * amp;
 	Out.ar(out, sig);
+	DetectSilence.ar(sig, doneAction: 2);
 }).store;
 
 // --- src_formant ---
@@ -80,8 +106,12 @@ SynthDef(\src_fm, { |out=0, freq=440, amp=0.1, decay=1,
 SynthDef(\src_formant, { |out=0, freq=440, amp=0.1, decay=1,
 	f1=800,  f2=1200, f3=2500, f4=3500, f5=5000,
 	q1=20,   q2=20,   q3=20,   q4=20,   q5=20,
-	a1=1.0,  a2=0.7,  a3=0.5,  a4=0.3,  a5=0.0|
-	var env = EnvGen.kr(Env.perc(0.005, decay), doneAction: 2);
+	a1=1.0,  a2=0.7,  a3=0.5,  a4=0.3,  a5=0.0, env_type=0|
+	var env0 = EnvGen.kr(Env.perc(0.005, decay), doneAction: 0);
+	var env1 = EnvGen.kr(Env.perc(decay * 0.6, decay * 0.4, 1, 4), doneAction: 0);
+	var env2 = EnvGen.kr(Env.sine(decay), doneAction: 0);
+	var env3 = EnvGen.kr(Env.linen(0.01, decay * 0.7, decay * 0.3), doneAction: 0);
+	var env = Select.kr(env_type.round, [env0, env1, env2, env3]);
 	var exciter = Impulse.ar(0) + (WhiteNoise.ar * EnvGen.kr(Env.perc(0.001, 0.005)));
 	var sig = Mix([
 		BPF.ar(exciter, f1.clip(20, 20000), (1/q1.max(1)).clip(0.001, 1)) * a1,
@@ -92,6 +122,7 @@ SynthDef(\src_formant, { |out=0, freq=440, amp=0.1, decay=1,
 	]);
 	sig = sig * env * amp;
 	Out.ar(out, sig);
+	DetectSilence.ar(sig, doneAction: 2);
 }).store;
 
 // --- src_grain ---
@@ -101,8 +132,12 @@ SynthDef(\src_formant, { |out=0, freq=440, amp=0.1, decay=1,
 // grain_density: grains per second
 // pitch_scatter: random pitch deviation per grain (0=none, 1=±octave)
 SynthDef(\src_grain, { |out=0, freq=440, amp=0.1, decay=1,
-	grain_dur=0.02, grain_density=20, pitch_scatter=0.1, waveform=0|
-	var env = EnvGen.kr(Env.perc(0.01, decay), doneAction: 2);
+	grain_dur=0.02, grain_density=20, pitch_scatter=0.1, waveform=0, env_type=0|
+	var env0 = EnvGen.kr(Env.perc(0.005, decay), doneAction: 0);
+	var env1 = EnvGen.kr(Env.perc(decay * 0.6, decay * 0.4, 1, 4), doneAction: 0);
+	var env2 = EnvGen.kr(Env.sine(decay), doneAction: 0);
+	var env3 = EnvGen.kr(Env.linen(0.01, decay * 0.7, decay * 0.3), doneAction: 0);
+	var env = Select.kr(env_type.round, [env0, env1, env2, env3]);
 	var trig = Impulse.ar(grain_density);
 	var scatter = TRand.ar(-1 * pitch_scatter, pitch_scatter, trig);
 	var grain_freq = freq * (2 ** scatter);
@@ -114,6 +149,7 @@ SynthDef(\src_grain, { |out=0, freq=440, amp=0.1, decay=1,
 	]);
 	var sig = source * grain_env * env * amp;
 	Out.ar(out, sig);
+	DetectSilence.ar(sig, doneAction: 2);
 }).store;
 
 // --- src_string ---
