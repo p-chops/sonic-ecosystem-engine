@@ -75,12 +75,17 @@ class Ecosystem:
         self._tasks = [t for t in self._tasks if not t.done()]
 
     def _spawn_to_targets(self):
+        # Spawn at most max_per_tick agents total per tick for staggered entry
+        max_per_tick = 2
+        spawned = 0
         for species in self.biome.species:
+            if spawned >= max_per_tick:
+                break
             target = self.state.get_population_target(species)
             current = sum(1 for a in self.agents if a.species.name == species.name)
-            while current < target:
+            if current < target:
                 self._spawn_agent(species)
-                current += 1
+                spawned += 1
 
     def _spawn_agent(self, species) -> Agent:
         rng = random.Random()
