@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import random as stdlib_random
 from typing import TYPE_CHECKING
 
@@ -111,10 +112,13 @@ class Agent:
 
         # Available pitches for this agent
         self.pitches = species.pitches_in_range()
-        if not self.pitches:
-            # Fallback: use freq_range midpoint
-            mid = (species.freq_range[0] + species.freq_range[1]) / 2
-            self.pitches = [mid]
+        if len(self.pitches) < 3:
+            # Range too narrow — fill in by subdividing the range
+            lo, hi = species.freq_range
+            n_fill = max(5, len(species.pitch_set))
+            log_lo, log_hi = math.log2(max(lo, 20)), math.log2(max(hi, 21))
+            self.pitches = [2 ** lerp(log_lo, log_hi, i / (n_fill - 1))
+                            for i in range(n_fill)]
 
         # Ecosystem state reference (for activity/flocking)
         self.ecosystem_state = ecosystem_state
