@@ -34,6 +34,7 @@ class ChainSpec:
     """Blueprint for a voice chain, generated per-species."""
     source: str                                    # e.g. "src_fm"
     effects: list[tuple[str, dict]] = field(default_factory=list)  # [(name, params), ...]
+    source_params: dict = field(default_factory=dict)  # species-level source params (ratio, index, etc.)
     pan: float = 0.0
     amp: float = 1.0
     send: float = 0.3      # medium bus send level
@@ -86,18 +87,19 @@ class VoiceChain:
     def vocalize(self, **note_params) -> int:
         """Fire a note into the chain. The source self-frees via doneAction: 2.
 
-        Standard note params: freq, amp, decay.
-        Source-specific params are passed through.
+        Species-level source_params are sent as defaults; note_params override.
         Returns the source synth node ID, or -1 if torn down.
         """
         if self._torn_down:
             return -1
+        # Species defaults, overridden by per-note params
+        params = {**self.spec.source_params, **note_params}
         return self.sc.synth(
             self.spec.source,
             target_group=self.group,
             add_action=ADD_TO_HEAD,
             out=self.input_bus,
-            **note_params,
+            **params,
         )
 
     def vocalize_song(self, notes: list[dict]) -> None:
@@ -116,7 +118,8 @@ class VoiceChain:
             gap = note.get("gap", 0.0)
             dur = note.get("dur", note.get("decay", 0.5))
             synth_params = {
-                k: v for k, v in note.items() if k not in ("gap", "dur")
+                **self.spec.source_params,
+                **{k: v for k, v in note.items() if k not in ("gap", "dur")},
             }
 
             _, msg = self.sc.make_synth_msg(

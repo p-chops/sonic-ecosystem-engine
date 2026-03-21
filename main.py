@@ -36,19 +36,26 @@ log = logging.getLogger("see")
 
 
 async def stdin_listener(next_event: asyncio.Event):
-    """Listen for 'n' on stdin to trigger next biome."""
-    loop = asyncio.get_event_loop()
-    reader = asyncio.StreamReader()
-    protocol = asyncio.StreamReaderProtocol(reader)
-    await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+    """Listen for 'n' on stdin to trigger next biome.
 
-    while True:
-        line = await reader.readline()
-        if not line:
-            break
-        cmd = line.decode().strip().lower()
-        if cmd in ("n", "next"):
-            next_event.set()
+    Uses a thread to avoid connect_read_pipe which puts stdin/stdout
+    into non-blocking mode and causes BlockingIOError on print().
+    """
+    loop = asyncio.get_event_loop()
+
+    def _read_stdin():
+        while True:
+            try:
+                line = sys.stdin.readline()
+            except EOFError:
+                break
+            if not line:
+                break
+            cmd = line.strip().lower()
+            if cmd in ("n", "next"):
+                loop.call_soon_threadsafe(next_event.set)
+
+    await loop.run_in_executor(None, _read_stdin)
 
 
 async def run(args):

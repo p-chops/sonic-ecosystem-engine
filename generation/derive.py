@@ -6,6 +6,7 @@ encode aesthetic judgment about what combinations tend to sound good.
 
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, field
 
@@ -138,49 +139,80 @@ def _weighted_sample(weights: dict[str, float], k: int, rng: random.Random) -> l
 
 # -- Effect chain derivation ---------------------------------------------------
 
-def _derive_effects(dna: MacroDNA, rng: random.Random) -> list[tuple[str, dict]]:
-    """Derive an effect chain from DNA."""
-    effects = []
+# Archetype-weighted effect probability multipliers.
+# >1.0 increases chance, <1.0 decreases. Unlisted effects default to 1.0.
+ARCHETYPE_EFFECT_MULTS: dict[str, dict[str, float]] = {
+    "caller": {
+        "fx_delay": 1.5,    # spatial interest on phrases
+        "fx_chorus": 1.3,   # gentle thickening
+        "fx_fold": 0.5,     # preserve phrase clarity
+    },
+    "clicker": {
+        "fx_fold": 2.0,     # transient coloring
+        "fx_ring": 1.5,     # metallic character
+        "fx_bpf": 1.5,      # resonant ping
+        "fx_chorus": 0.3,   # doesn't help short impulses
+    },
+    "drone": {
+        "fx_chorus": 2.0,   # thickening
+        "fx_delay": 1.5,    # depth and movement
+        "fx_fold": 0.3,     # distortion fights sustained tones
+        "fx_ring": 0.5,     # same reason
+    },
+    "swarm": {
+        "fx_chorus": 1.5,   # density
+    },
+    "responder": {
+        "fx_delay": 1.5,    # dramatic echo
+        "fx_fold": 1.3,     # rare species, should stand out
+    },
+}
 
-    if rng.random() < 0.6:
+
+def _derive_effects(dna: MacroDNA, rng: random.Random, archetype: str) -> list[tuple[str, dict]]:
+    """Derive an effect chain from DNA, weighted by archetype."""
+    effects = []
+    mults = ARCHETYPE_EFFECT_MULTS.get(archetype, {})
+
+    if rng.random() < min(0.6 * mults.get("fx_lpf", 1.0), 0.95):
         cutoff_t = max(0, min(1, dna.spectral_center + rng.gauss(0, 0.15)))
         effects.append(("fx_lpf", {
             "cutoff": lerp(200, 8000, cutoff_t),
             "res": rng.uniform(0.0, 0.5),
         }))
 
-    if rng.random() < 0.3:
+    if rng.random() < min(0.3 * mults.get("fx_hpf", 1.0), 0.95):
         effects.append(("fx_hpf", {
             "cutoff": lerp(40, 800, rng.random()),
             "res": rng.uniform(0.0, 0.3),
         }))
 
-    if rng.random() < 0.15:
+    if rng.random() < min(0.15 * mults.get("fx_bpf", 1.0), 0.95):
         effects.append(("fx_bpf", {
             "center": lerp(200, 4000, dna.spectral_center + rng.gauss(0, 0.2)),
             "q": rng.uniform(1, 10),
         }))
 
-    if rng.random() < 0.25:
+    if rng.random() < min(0.25 * mults.get("fx_fold", 1.0), 0.95):
         effects.append(("fx_fold", {
             "drive": lerp(1.1, 4.0, rng.random()),
             "symmetry": rng.uniform(0, 0.5),
         }))
 
-    if rng.random() < 0.3 * dna.room_scale:
+    if rng.random() < min(0.3 * dna.room_scale * mults.get("fx_delay", 1.0), 0.95):
         effects.append(("fx_delay", {
             "delay_time": lerp(0.01, 0.3, rng.random()),
             "feedback": lerp(0.1, 0.7, rng.random()),
             "mix": lerp(0.2, 0.6, rng.random()),
         }))
 
-    if rng.random() < 0.2:
+    if rng.random() < min(0.2 * mults.get("fx_ring", 1.0), 0.95):
         effects.append(("fx_ring", {
             "mod_freq": lerp(20, 2000, rng.random()),
             "mod_depth": rng.uniform(0.3, 1.0),
         }))
 
-    if rng.random() < 0.2:
+    if rng.random() < min(0.2 * mults.get("fx_chorus", 1.0), 0.95):
         effects.append(("fx_chorus", {
             "rate": rng.uniform(0.1, 1.0),
             "depth": rng.uniform(0.001, 0.008),
@@ -192,21 +224,34 @@ def _derive_effects(dna: MacroDNA, rng: random.Random) -> list[tuple[str, dict]]
 
 # -- Archetype-specific parameter derivation -----------------------------------
 
-def _derive_caller_params(dna: MacroDNA, rng: random.Random) -> dict:
+def _derive_caller_params(dna: MacroDNA, rng: random.Random, size: float = 0.5) -> dict:
+    """Derive caller behavior params. size: 0=small/high/fast, 1=large/low/slow."""
     return {
-        "song_length": rng.randint(3, int(lerp(5, 10, dna.temporal))),
-        "note_dur_range": (
-            lerp(0.05, 0.15, dna.temporal),
-            lerp(0.2, 0.8, 1 - dna.temporal),
+        # Small callers: more notes, chattery. Large callers: fewer notes, deliberate.
+        "song_length": rng.randint(
+            int(lerp(5, 2, size)),
+            int(lerp(10, 6, size)),
         ),
-        "note_gap": (0.02, lerp(0.05, 0.2, 1 - dna.temporal)),
+        # Small: short notes. Large: long sustained notes.
+        "note_dur_range": (
+            lerp(0.03, 0.15, size),
+            lerp(0.12, 0.8, size),
+        ),
+        # Small: tight gaps. Large: wide gaps.
+        "note_gap": (
+            lerp(0.01, 0.04, size),
+            lerp(0.04, 0.25, size),
+        ),
+        # Small: short rests. Large: long rests.
         "base_pause": (
-            lerp(1.0, 2.0, dna.sociality),
-            lerp(3.0, 8.0, 1 - dna.sociality),
+            lerp(0.5, 2.0, size),
+            lerp(2.0, 10.0, size),
         ),
         "glide_prob": lerp(0.05, 0.4, rng.random()),
         "transpose_prob": lerp(0.05, 0.3, rng.random()),
         "fatigue_threshold": lerp(3.0, 8.0, 1 - dna.sociality),
+        # Pass size through so the agent can use it for amplitude
+        "size": size,
     }
 
 
@@ -265,6 +310,82 @@ _ARCHETYPE_PARAM_DERIVERS = {
 }
 
 
+# -- Source parameter derivation -----------------------------------------------
+
+def _derive_source_params(source: str, dna: MacroDNA, rng: random.Random) -> dict:
+    """Derive source-specific synth parameters. These define the species' timbre."""
+    if source == "src_sine":
+        return {
+            "n_partials": rng.choice([1, 1, 2, 3, 4, 5, 6, 8]),
+            "partial_spread": rng.uniform(0, 0.8),
+            "partial_falloff": rng.uniform(0.3, 0.9),
+        }
+
+    elif source == "src_fm":
+        # Ratio defines the harmonic character; integer ratios = harmonic,
+        # non-integer = inharmonic/metallic
+        ratio_type = rng.choice(["harmonic", "harmonic", "inharmonic"])
+        if ratio_type == "harmonic":
+            ratio = rng.choice([1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0])
+        else:
+            ratio = rng.uniform(1.1, 7.0)
+        return {
+            "ratio": ratio,
+            "index": rng.uniform(0.5, 12.0),
+            "index_env_amount": rng.uniform(0.0, 1.0),
+        }
+
+    elif source == "src_noise":
+        return {
+            "noise_type": rng.choice([0, 0, 1, 1, 2, 3]),  # white, pink more common
+            "bandwidth": rng.uniform(100, 2000),
+        }
+
+    elif source == "src_click":
+        return {
+            "impulse_type": rng.choice([0, 0, 1, 2]),
+            "reson_q": rng.uniform(2, 50),
+        }
+
+    elif source == "src_formant":
+        # Generate random formant frequencies — vowel-like but alien
+        base = rng.uniform(200, 1200)
+        return {
+            "f1": base,
+            "f2": base * rng.uniform(1.2, 2.5),
+            "f3": base * rng.uniform(2.0, 5.0),
+            "f4": base * rng.uniform(3.5, 8.0),
+            "f5": base * rng.uniform(5.0, 12.0),
+            "q1": rng.uniform(8, 40),
+            "q2": rng.uniform(8, 40),
+            "q3": rng.uniform(8, 35),
+            "q4": rng.uniform(8, 30),
+            "q5": rng.uniform(8, 25),
+            "a1": 1.0,
+            "a2": rng.uniform(0.4, 1.0),
+            "a3": rng.uniform(0.2, 0.8),
+            "a4": rng.uniform(0.0, 0.5),
+            "a5": rng.uniform(0.0, 0.3),
+        }
+
+    elif source == "src_grain":
+        return {
+            "grain_dur": rng.uniform(0.005, 0.06),
+            "grain_density": rng.uniform(5, 60),
+            "pitch_scatter": rng.uniform(0.0, 0.5),
+            "waveform": rng.choice([0, 0, 1, 2]),  # sine most common
+        }
+
+    elif source == "src_string":
+        return {
+            "brightness": rng.uniform(0.1, 0.9),
+            "damping": rng.uniform(0.1, 0.8),
+            "noise_mix": rng.uniform(0.0, 0.4),
+        }
+
+    return {}
+
+
 # -- Species derivation --------------------------------------------------------
 
 def _derive_single_species(
@@ -279,8 +400,11 @@ def _derive_single_species(
     source_weights = {name: fn(dna) for name, fn in SOURCE_WEIGHTS.items()}
     source = _weighted_choice(source_weights, rng)
 
+    # Source-specific parameters (the species' timbral identity)
+    source_params = _derive_source_params(source, dna, rng)
+
     # Effect chain
-    effects = _derive_effects(dna, rng)
+    effects = _derive_effects(dna, rng, archetype)
 
     # Frequency range — drones are pushed low
     if archetype == "drone":
@@ -299,8 +423,19 @@ def _derive_single_species(
     # Age range
     age_lo, age_hi = ARCHETYPE_AGE_RANGES[archetype]
 
+    # Size factor from frequency range (log-scaled, 0=small/high, 1=large/low)
+    # Full range is ~20Hz to ~3200Hz; map midpoint in log space
+    freq_mid = (freq_lo + freq_hi) / 2
+    log_min, log_max = math.log2(20), math.log2(3200)
+    size = 1.0 - max(0.0, min(1.0,
+        (math.log2(max(freq_mid, 20)) - log_min) / (log_max - log_min)
+    ))
+
     # Archetype-specific params
-    params = _ARCHETYPE_PARAM_DERIVERS[archetype](dna, rng)
+    if archetype == "caller":
+        params = _derive_caller_params(dna, rng, size=size)
+    else:
+        params = _ARCHETYPE_PARAM_DERIVERS[archetype](dna, rng)
 
     return Species(
         name=f"{archetype}_{index}",
@@ -308,6 +443,7 @@ def _derive_single_species(
         chain_spec=ChainSpec(
             source=source,
             effects=effects,
+            source_params=source_params,
         ),
         freq_range=(freq_lo, freq_hi),
         pitch_set=pitch_set,
@@ -338,8 +474,11 @@ class BiomeSpec:
             f"  Species ({len(self.species)}):",
         ]
         for sp in self.species:
+            # Format key source params concisely
+            sp_params = {k: (f"{v:.2f}" if isinstance(v, float) else str(v))
+                         for k, v in sp.chain_spec.source_params.items()}
             lines.append(
-                f"    {sp.name}: {sp.chain_spec.source} + "
+                f"    {sp.name}: {sp.chain_spec.source}({sp_params}) + "
                 f"{[e[0] for e in sp.chain_spec.effects]}  "
                 f"pop={sp.population}  freq={sp.freq_range[0]:.0f}-{sp.freq_range[1]:.0f}Hz"
             )

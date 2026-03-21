@@ -72,6 +72,11 @@ class Agent:
         if species.archetype == "drone":
             self.amp *= 0.3  # drones sit underneath
 
+        # Size-based amplitude for callers: small/high creatures are quieter
+        size = species.params.get("size")
+        if size is not None:
+            self.amp *= lerp(0.4, 1.0, size)  # small=0.4x, large=1.0x
+
         self.send = lerp(0.1, 0.8, self.depth)
         self.activity_weight = lerp(1.0, 0.0, self.depth)
 
@@ -79,6 +84,7 @@ class Agent:
         spec = ChainSpec(
             source=species.chain_spec.source,
             effects=list(species.chain_spec.effects),
+            source_params=dict(species.chain_spec.source_params),
             pan=self.pos,
             amp=self.amp,
             send=self.send,
