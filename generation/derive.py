@@ -272,11 +272,22 @@ def _derive_clicker_params(dna: MacroDNA, rng: random.Random) -> dict:
 def _derive_drone_params(dna: MacroDNA, rng: random.Random) -> dict:
     return {
         "drift_rate": (
-            lerp(2.0, 5.0, dna.temporal),
-            lerp(5.0, 15.0, 1 - dna.temporal),
+            lerp(1.5, 4.0, dna.temporal),
+            lerp(4.0, 10.0, 1 - dna.temporal),
         ),
-        "drift_range": lerp(0.02, 0.15, rng.random()),
+        "drift_range": lerp(0.03, 0.2, rng.random()),
         "inverse_coupling": dna.sociality > 0.3,
+        # Pan wander
+        "pan_drift_rate": rng.uniform(0.02, 0.15),  # Hz — very slow LFO
+        "pan_drift_range": rng.uniform(0.3, 0.9),    # how wide the pan sweeps
+        # Medium send wander — drones breathe in and out of the reverb
+        "send_drift_rate": rng.uniform(0.01, 0.08),
+        "send_lo": rng.uniform(0.3, 0.5),
+        "send_hi": rng.uniform(0.7, 1.0),
+        # Filter sweep — slow spectral movement
+        "filter_drift_rate": rng.uniform(0.01, 0.1),
+        "filter_lo": lerp(300, 800, rng.random()),
+        "filter_hi": lerp(2000, 8000, rng.random()),
     }
 
 
