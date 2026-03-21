@@ -74,7 +74,8 @@ class Resonance:
 
 @dataclass
 class MediumSpec:
-    reverb_time: float
+    reverb_roomsize: float  # meters
+    reverb_time: float      # seconds
     reverb_damping: float
     resonances: list[Resonance]
     noise_floor_level: float   # dB
@@ -105,7 +106,8 @@ def derive_medium(dna: MacroDNA, rng: random.Random) -> MediumSpec:
     """Derive medium parameters from DNA."""
     n_resonances = int(lerp(2, 6, dna.room_scale))
     return MediumSpec(
-        reverb_time=lerp(0.3, 0.95, dna.room_scale),  # FreeVerb room param is 0–1
+        reverb_roomsize=lerp(5, 200, dna.room_scale ** 1.5),  # meters — 5m closet to 200m cathedral
+        reverb_time=lerp(0.5, 30.0, dna.room_scale ** 1.5),  # seconds — short to very long tail
         reverb_damping=lerp(0.2, 0.8, 1 - dna.spectral_center),
         resonances=_generate_resonances(
             n=n_resonances,
@@ -483,7 +485,7 @@ class BiomeSpec:
                 f"pop={sp.population}  freq={sp.freq_range[0]:.0f}-{sp.freq_range[1]:.0f}Hz"
             )
         lines.append(
-            f"  Medium: reverb={self.medium.reverb_time:.1f}s  "
+            f"  Medium: room={self.medium.reverb_roomsize:.0f}m  decay={self.medium.reverb_time:.1f}s  "
             f"resonances={len(self.medium.resonances)}  "
             f"noise_floor={self.medium.noise_floor_level:.0f}dB"
         )

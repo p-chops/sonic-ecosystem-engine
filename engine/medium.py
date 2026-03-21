@@ -87,11 +87,12 @@ class Medium:
         self.nodes.append(node)
         self._eq_node = node
 
-        # 3. Reverb (mono in → stereo out to main bus 0)
+        # 3. Reverb (mono in → decorrelated stereo out to main bus 0)
         node = sc.synth("med_reverb", target_group=self.group,
                         add_action=ADD_TO_TAIL,
                         **{"in": self._bus_after_eq, "out": 0},
-                        time=spec.reverb_time,
+                        roomsize=spec.reverb_roomsize,
+                        revtime=spec.reverb_time,
                         damping=spec.reverb_damping,
                         mix=reverb_mix)
         self.nodes.append(node)
@@ -118,11 +119,13 @@ class Medium:
 
     # -- Instant setters -------------------------------------------------------
 
-    def set_reverb(self, time: float | None = None, damping: float | None = None,
-                   mix: float | None = None):
+    def set_reverb(self, roomsize: float | None = None, revtime: float | None = None,
+                   damping: float | None = None, mix: float | None = None):
         params = {}
-        if time is not None:
-            params["time"] = time
+        if roomsize is not None:
+            params["roomsize"] = roomsize
+        if revtime is not None:
+            params["revtime"] = revtime
         if damping is not None:
             params["damping"] = damping
         if mix is not None:

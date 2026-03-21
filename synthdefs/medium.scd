@@ -28,20 +28,26 @@ SynthDef(\med_resonance, { |in=0, out=0,
 }).store;
 
 // --- med_reverb ---
-// Spatial diffusion using FreeVerb2 (mono in → decorrelated stereo out).
-// time: reverb time (mapped to roomsize)
-// damping: high-frequency absorption
+// Spatial diffusion using GVerb (mono in → decorrelated stereo out).
+// roomsize: room size in meters (0.1–300)
+// revtime: reverb decay time in seconds (0.1–100)
+// damping: high-frequency absorption (0–1)
 // mix: dry/wet
-SynthDef(\med_reverb, { |in=0, out=0, time=0.7, damping=0.5, mix=0.5|
+SynthDef(\med_reverb, { |in=0, out=0, roomsize=20, revtime=3, damping=0.5,
+	drylevel=0, mix=0.85|
 	var sig = In.ar(in, 1);
-	var verb = FreeVerb2.ar(sig, sig,
-		mix: 1.0,  // internal mix at full wet, we blend ourselves
-		room: time.clip(0, 1),
-		damp: damping.clip(0, 1)
+	var verb = GVerb.ar(sig,
+		roomsize: roomsize.clip(0.1, 300),
+		revtime: revtime.clip(0.1, 100),
+		damping: damping.clip(0, 1),
+		inputbw: (1 - damping).clip(0.1, 1),  // darker rooms absorb more input HF too
+		drylevel: drylevel,  // we handle dry/wet ourselves
+		earlyreflevel: 0.5,
+		taillevel: 0.4
 	);
 	var dry = Pan2.ar(sig);
 	var out_sig = (dry * (1 - mix)) + (verb * mix);
-	Out.ar(out, out_sig);  // stereo output
+	Out.ar(out, out_sig);
 }).store;
 
 // --- med_eq ---
