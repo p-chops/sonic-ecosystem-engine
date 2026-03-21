@@ -35,11 +35,11 @@ SOURCE_WEIGHTS = {
 # -- Archetype population ranges (min, max agents) ----------------------------
 
 ARCHETYPE_POP_RANGES = {
-    "caller":    (2, 6),
-    "clicker":   (3, 8),
-    "drone":     (1, 3),
-    "swarm":     (2, 6),
-    "responder": (1, 2),
+    "caller":    (3, 8),
+    "clicker":   (4, 10),
+    "drone":     (2, 4),
+    "swarm":     (3, 8),
+    "responder": (1, 3),
 }
 
 # -- Archetype age ranges (min_ticks, max_ticks) ------------------------------
@@ -547,7 +547,7 @@ def generate_biome(seed: int) -> BiomeSpec:
     pitch_strategy, pitch_set = generate_pitch_set(dna, rng)
 
     # Species count and archetype distribution
-    n_species = max(2, int(lerp(2, 8, dna.density)))
+    n_species = max(3, int(lerp(4, 10, dna.density)))
     archetype_weights = {
         "caller":    max(0.01, dna.sociality * dna.temporal),
         "clicker":   max(0.01, dna.temporal * (1 - dna.sociality * 0.5)),
