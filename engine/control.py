@@ -55,6 +55,13 @@ class ControlServer:
         })
         asyncio.ensure_future(self._broadcast(msg))
 
+    def push_status(self, status: dict):
+        """Push a live status update to all connected clients."""
+        if not self._clients:
+            return
+        msg = json.dumps({"event": "status", **status})
+        asyncio.ensure_future(self._broadcast(msg))
+
     async def _broadcast(self, msg: str):
         for ws in list(self._clients):
             try:

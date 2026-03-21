@@ -105,6 +105,23 @@ class Ecosystem:
     def alive_count(self) -> int:
         return sum(1 for a in self.agents if a.alive)
 
+    def get_status(self) -> dict:
+        """Snapshot of current ecosystem state for the web UI."""
+        # Count agents per species
+        species_counts: dict[str, int] = {}
+        for agent in self.agents:
+            if agent.alive:
+                name = agent.species.name
+                species_counts[name] = species_counts.get(name, 0) + 1
+
+        return {
+            "agents_alive": self.alive_count(),
+            "agents_total": self.agent_count(),
+            "activity": round(self.state.activity, 3),
+            "spawning": self._spawning,
+            "species_counts": species_counts,
+        }
+
     async def teardown(self):
         """Kill all agents and free medium. Drones get a graceful fade-out."""
         self.alive = False
@@ -128,11 +145,12 @@ class Ecosystem:
 class EcosystemManager:
     """Manages biome transitions — crossfading between ecosystems."""
 
-    def __init__(self, sc: SCBridge):
+    def __init__(self, sc: SCBridge, on_status=None):
         self.sc = sc
         self.current: Ecosystem | None = None
         self._run_task: asyncio.Task | None = None
         self._limiter_node: int | None = None
+        self._on_status = on_status  # callable(dict) — called during transitions
 
     def _ensure_limiter(self):
         """Create a single persistent limiter on bus 0 if not already running."""
@@ -178,6 +196,7 @@ class EcosystemManager:
         old.stop_spawning()
         log.info("Transition: fading out old biome (seed=%d)", old.biome.seed)
         fade_out_task = asyncio.create_task(old.medium.fade_out(duration=fade_out_dur))
+        self._push_status({"transitioning": True, **old.get_status()})
 
         # Brief pause before starting new biome (let old start to thin)
         await asyncio.sleep(overlap_delay)
@@ -188,6 +207,7 @@ class EcosystemManager:
         fade_in_task = asyncio.create_task(
             self.current.medium.fade_in(duration=fade_in_dur)
         )
+        self._push_status({"transitioning": True, **self.current.get_status()})
 
         # Phase 3: Wait for old agents to die off naturally (up to deadline)
         elapsed = overlap_delay
@@ -197,6 +217,8 @@ class EcosystemManager:
             elapsed += tick
             old._age_and_cull()
             old._decay_activity()
+            if self.current:
+                self._push_status({"transitioning": True, **self.current.get_status()})
 
         # Phase 4: Ensure fades have finished
         await asyncio.gather(fade_out_task, fade_in_task, return_exceptions=True)
@@ -213,6 +235,10 @@ class EcosystemManager:
         log.info("Transition: old biome torn down after %.1fs", elapsed)
 
         self._run_task = new_task
+
+    def _push_status(self, status: dict):
+        if self._on_status:
+            self._on_status(status)
 
     async def stop(self):
         """Stop everything."""

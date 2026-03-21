@@ -162,6 +162,47 @@
   }
   .medium-item span { color: #888; }
 
+  /* Live status */
+  .live-status {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    font-size: 0.72rem;
+    color: #555;
+    margin-bottom: 1.5rem;
+    padding: 0.5rem 0.9rem;
+    background: #12121a;
+    border: 1px solid #1a1a2a;
+    border-radius: 4px;
+  }
+  .live-stat { display: flex; align-items: center; gap: 0.4rem; }
+  .live-stat .label { color: #555; }
+  .live-stat .value { color: #888; }
+  .activity-bar-wrap {
+    width: 80px;
+    height: 4px;
+    background: #1a1a25;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .activity-bar {
+    height: 100%;
+    background: #5a7a5a;
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+  .species-count-badge {
+    display: inline-block;
+    min-width: 1.2em;
+    text-align: center;
+    padding: 0.05rem 0.3rem;
+    border-radius: 2px;
+    background: #1a2a1a;
+    color: #5a8a5a;
+    font-size: 0.6rem;
+    margin-left: 0.4rem;
+  }
+
   /* Pitch */
   .pitch-info {
     font-size: 0.72rem;
@@ -200,6 +241,22 @@
 <div class="panel">
   <div id="seed-display">--</div>
 
+  <div id="live-status" class="live-status" style="display:none">
+    <div class="live-stat">
+      <span class="label">agents</span>
+      <span class="value" id="live-agents">0</span>
+    </div>
+    <div class="live-stat">
+      <span class="label">activity</span>
+      <div class="activity-bar-wrap">
+        <div class="activity-bar" id="live-activity-bar" style="width:0%"></div>
+      </div>
+    </div>
+    <div class="live-stat" id="live-spawning-indicator" style="display:none">
+      <span style="color:#aa6">transitioning</span>
+    </div>
+  </div>
+
   <div id="dna-section" class="dna-grid" style="display:none"></div>
 
   <div id="species-section" class="species-list"></div>
@@ -227,10 +284,16 @@ const dnaSection = document.getElementById('dna-section');
 const speciesSection = document.getElementById('species-section');
 const mediumSection = document.getElementById('medium-section');
 const pitchSection = document.getElementById('pitch-section');
+const liveStatus = document.getElementById('live-status');
+const liveAgents = document.getElementById('live-agents');
+const liveActivityBar = document.getElementById('live-activity-bar');
+const liveSpawning = document.getElementById('live-spawning-indicator');
 const nextBtn = document.getElementById('next-btn');
 const gotoBtn = document.getElementById('goto-btn');
 const seedInput = document.getElementById('seed-input');
 const historyList = document.getElementById('history-list');
+
+let lastSpeciesCounts = {};
 
 const DNA_DIMS = [
   { key: 'density', label: 'density', cls: 'dna-density', lo: 'sparse', hi: 'saturated' },
@@ -257,6 +320,8 @@ function connect() {
     const data = JSON.parse(e.data);
     if ((data.event === 'biome_change' || data.event === 'info') && data.seed != null) {
       updateBiome(data);
+    } else if (data.event === 'status') {
+      updateLiveStatus(data);
     }
   };
 
@@ -283,6 +348,24 @@ function updateBiome(data) {
   if (data.species) renderSpecies(data.species);
   if (data.medium) renderMedium(data.medium);
   if (data.pitch_set) renderPitch(data.pitch_set);
+  liveStatus.style.display = 'flex';
+  lastSpeciesCounts = {};
+}
+
+function updateLiveStatus(data) {
+  liveStatus.style.display = 'flex';
+  liveAgents.textContent = data.agents_alive;
+  // Activity: scale to 0-100%, cap at 10 for display
+  const actPct = Math.min(data.activity / 10 * 100, 100);
+  liveActivityBar.style.width = actPct + '%';
+  liveSpawning.style.display = data.transitioning ? 'flex' : 'none';
+
+  // Update species count badges
+  lastSpeciesCounts = data.species_counts || {};
+  document.querySelectorAll('.species-count-badge').forEach(el => {
+    const name = el.dataset.species;
+    el.textContent = lastSpeciesCounts[name] || 0;
+  });
 }
 
 function renderDNA(dna) {
@@ -319,8 +402,8 @@ function renderSpecies(species) {
     return `
       <div class="species-card">
         <div class="species-header">
-          <span class="species-name">${sp.archetype}</span>
-          <span class="species-pop">pop ${sp.population} \u00b7 ${sp.depth_dist}</span>
+          <span class="species-name">${sp.archetype}<span class="species-count-badge" data-species="${sp.name}">${lastSpeciesCounts[sp.name] || '?'}</span></span>
+          <span class="species-pop">target ${sp.population} \u00b7 ${sp.depth_dist}</span>
         </div>
         <div class="species-detail">
           <span class="species-source">${srcName}</span>

@@ -67,12 +67,13 @@ async def run(args):
     sc.load_synthdef_dir(abs_path)
     await asyncio.sleep(0.5)
 
-    manager = EcosystemManager(sc)
     next_event = asyncio.Event()
 
     # Start control server
     control = ControlServer(next_event, port=args.ws_port)
     await control.start()
+
+    manager = EcosystemManager(sc, on_status=control.push_status)
 
     # Start stdin listener
     asyncio.create_task(stdin_listener(next_event))
@@ -93,15 +94,23 @@ async def run(args):
             print(summary)
             print()
 
-            await manager.start_biome(biome)
             control.set_current_biome(biome)
+            await manager.start_biome(biome)
 
-            # Wait for auto-advance timer OR manual skip
+            # Wait for auto-advance timer OR manual skip, pushing status updates
             next_event.clear()
-            try:
-                await asyncio.wait_for(next_event.wait(), timeout=args.duration)
-                print(">> Skipping to next biome...")
-            except asyncio.TimeoutError:
+            elapsed = 0.0
+            status_interval = 3.0
+            while elapsed < args.duration:
+                try:
+                    await asyncio.wait_for(next_event.wait(), timeout=status_interval)
+                    print(">> Skipping to next biome...")
+                    break
+                except asyncio.TimeoutError:
+                    elapsed += status_interval
+                    if manager.current:
+                        control.push_status(manager.current.get_status())
+            else:
                 print(">> Auto-advancing...")
 
             # Use requested seed if provided, otherwise random
