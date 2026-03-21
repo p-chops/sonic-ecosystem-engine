@@ -327,10 +327,28 @@ _ARCHETYPE_PARAM_DERIVERS = {
 
 # -- Source parameter derivation -----------------------------------------------
 
-def _derive_source_params(source: str, dna: MacroDNA, rng: random.Random) -> dict:
+# Archetype-weighted envelope type selection.
+# [perc, swell, symmetric, sustained]
+_ARCHETYPE_ENV_WEIGHTS: dict[str, list[float]] = {
+    "caller":    [3, 2, 2, 1],   # mix of all, favoring perc
+    "clicker":   [5, 0.5, 0.5, 0.5],  # strongly perc
+    "drone":     [0.5, 3, 1, 3],  # swell and sustained
+    "swarm":     [5, 0.5, 1, 0.5],  # strongly perc
+    "responder": [1, 4, 2, 1],   # swell for dramatic entries
+}
+
+
+def _derive_source_params(source: str, dna: MacroDNA, rng: random.Random,
+                          archetype: str = "caller") -> dict:
     """Derive source-specific synth parameters. These define the species' timbre."""
+
+    # Envelope type — archetype-weighted
+    env_weights = _ARCHETYPE_ENV_WEIGHTS.get(archetype, [1, 1, 1, 1])
+    env_type = rng.choices([0, 1, 2, 3], weights=env_weights, k=1)[0]
+
     if source == "src_sine":
         return {
+            "env_type": env_type,
             "n_partials": rng.choice([1, 1, 2, 3, 4, 5, 6, 8]),
             "partial_spread": rng.uniform(0, 0.8),
             "partial_falloff": rng.uniform(0.3, 0.9),
@@ -345,6 +363,7 @@ def _derive_source_params(source: str, dna: MacroDNA, rng: random.Random) -> dic
         else:
             ratio = rng.uniform(1.1, 7.0)
         return {
+            "env_type": env_type,
             "ratio": ratio,
             "index": rng.uniform(0.5, 12.0),
             "index_env_amount": rng.uniform(0.0, 1.0),
@@ -352,12 +371,14 @@ def _derive_source_params(source: str, dna: MacroDNA, rng: random.Random) -> dic
 
     elif source == "src_noise":
         return {
+            "env_type": env_type,
             "noise_type": rng.choice([0, 0, 1, 1, 2, 3]),  # white, pink more common
             "bandwidth": rng.uniform(100, 2000),
         }
 
     elif source == "src_click":
         return {
+            "env_type": env_type,
             "impulse_type": rng.choice([0, 0, 1, 2]),
             "reson_q": rng.uniform(2, 50),
         }
@@ -366,6 +387,7 @@ def _derive_source_params(source: str, dna: MacroDNA, rng: random.Random) -> dic
         # Generate random formant frequencies — vowel-like but alien
         base = rng.uniform(200, 1200)
         return {
+            "env_type": env_type,
             "f1": base,
             "f2": base * rng.uniform(1.2, 2.5),
             "f3": base * rng.uniform(2.0, 5.0),
@@ -385,6 +407,7 @@ def _derive_source_params(source: str, dna: MacroDNA, rng: random.Random) -> dic
 
     elif source == "src_grain":
         return {
+            "env_type": env_type,
             "grain_dur": rng.uniform(0.005, 0.06),
             "grain_density": rng.uniform(5, 60),
             "pitch_scatter": rng.uniform(0.0, 0.5),
@@ -392,13 +415,14 @@ def _derive_source_params(source: str, dna: MacroDNA, rng: random.Random) -> dic
         }
 
     elif source == "src_string":
+        # src_string uses its own linen envelope, no env_type
         return {
             "brightness": rng.uniform(0.1, 0.9),
             "damping": rng.uniform(0.1, 0.8),
             "noise_mix": rng.uniform(0.0, 0.4),
         }
 
-    return {}
+    return {"env_type": env_type}
 
 
 # -- Species derivation --------------------------------------------------------
@@ -416,7 +440,7 @@ def _derive_single_species(
     source = _weighted_choice(source_weights, rng)
 
     # Source-specific parameters (the species' timbral identity)
-    source_params = _derive_source_params(source, dna, rng)
+    source_params = _derive_source_params(source, dna, rng, archetype=archetype)
 
     # Effect chain
     effects = _derive_effects(dna, rng, archetype)
