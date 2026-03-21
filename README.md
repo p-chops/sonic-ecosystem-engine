@@ -28,7 +28,7 @@ Compiled SynthDefs are included in `synthdefs/compiled/`. If you need to recompi
 - `synthdefs/effects.scd`
 - `synthdefs/medium.scd`
 
-Then copy the results: `cp ~/Library/Application\ Support/SuperCollider/synthdefs/*.scsyndef synthdefs/compiled/`
+Then copy the results (typically found in SuperCollider's local folder) to `synthdefs/compiled/`.
 
 ## Usage
 
