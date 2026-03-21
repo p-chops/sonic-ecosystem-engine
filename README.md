@@ -13,16 +13,6 @@ Procedural soundscape generation modeled as sonic ecosystems. Each biome is a se
 pip install -e .
 ```
 
-### Compile SynthDefs
-
-Open SuperCollider IDE, boot the server (`s.boot`), then evaluate each file:
-
-- `synthdefs/sources.scd`
-- `synthdefs/effects.scd`
-- `synthdefs/medium.scd`
-
-This compiles the SynthDefs and stores them via `.store`.
-
 ## Usage
 
 With scsynth running:

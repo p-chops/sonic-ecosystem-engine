@@ -20,6 +20,3 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
-
-# Compiled SynthDefs (regenerate from .scd sources)
-synthdefs/compiled/*.scsyndef
