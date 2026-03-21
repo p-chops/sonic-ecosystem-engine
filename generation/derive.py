@@ -77,6 +77,7 @@ class MediumSpec:
     reverb_roomsize: float  # meters
     reverb_time: float      # seconds
     reverb_damping: float
+    reverb_mix: float       # 0=dry, 1=fully wet
     resonances: list[Resonance]
     noise_floor_level: float   # dB
     noise_floor_color: float   # 0=white, 1=brown
@@ -109,6 +110,7 @@ def derive_medium(dna: MacroDNA, rng: random.Random) -> MediumSpec:
         reverb_roomsize=lerp(5, 200, dna.room_scale ** 1.5),  # meters — 5m closet to 200m cathedral
         reverb_time=lerp(0.5, 30.0, dna.room_scale ** 1.5),  # seconds — short to very long tail
         reverb_damping=lerp(0.2, 0.8, 1 - dna.spectral_center),
+        reverb_mix=lerp(0.4, 0.95, dna.room_scale),  # intimate=mostly dry, vast=almost fully wet
         resonances=_generate_resonances(
             n=n_resonances,
             center_hz=lerp(80, 2000, dna.spectral_center),
@@ -497,6 +499,7 @@ class BiomeSpec:
             )
         lines.append(
             f"  Medium: room={self.medium.reverb_roomsize:.0f}m  decay={self.medium.reverb_time:.1f}s  "
+            f"mix={self.medium.reverb_mix:.0%}  "
             f"resonances={len(self.medium.resonances)}  "
             f"noise_floor={self.medium.noise_floor_level:.0f}dB"
         )

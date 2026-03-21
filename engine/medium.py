@@ -59,8 +59,8 @@ class Medium:
 
         # Noise floor level: start silent if requested, ramp up later
         noise_level = SILENCE_DB if start_silent else spec.noise_floor_level
-        # Reverb mix: almost full wet — dry signal is already on bus 0 from agents
-        self._target_reverb_mix = 0.85
+        # Reverb mix: derived from DNA room_scale — intimate biomes are drier, vast ones are wetter
+        self._target_reverb_mix = spec.reverb_mix
         reverb_mix = 0.0 if start_silent else self._target_reverb_mix
         # Resonance mix: enough to color the sound
         self._target_reson_mix = 0.6
