@@ -172,6 +172,7 @@ def boot_scsynth(
     num_control_buses: int = 4096,
     max_nodes: int = 4096,
     max_synthdefs: int = 1024,
+    mem_size: int = 65536,  # RT memory in KB (default 8192 = 8MB)
 ) -> subprocess.Popen:
     """Boot scsynth as a subprocess. Returns the Popen handle."""
     cmd = [
@@ -182,6 +183,7 @@ def boot_scsynth(
         "-n", str(max_nodes),
         "-d", str(max_synthdefs),
         "-b", str(num_buffers),
+        "-m", str(mem_size),
         "-R", "0",  # no rendezvous (Bonjour)
         "-S", str(sample_rate),
         "-Z", str(block_size),

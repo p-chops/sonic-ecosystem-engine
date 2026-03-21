@@ -66,10 +66,11 @@ class DroneBehavior(Behavior):
     async def run(self):
         rng = self.agent.rng
 
-        # Spawn silent, then fade in
+        # Spawn near-silent, then fade in.
+        # amp must be > 0 to prevent DetectSilence from immediately freeing the node.
         self.drone_node = self.agent.voice.vocalize(
             freq=self.base_freq,
-            amp=0.0,
+            amp=0.0001,
             decay=self.agent.max_age * 10,
         )
 

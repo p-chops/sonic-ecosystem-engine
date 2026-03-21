@@ -529,6 +529,53 @@ class BiomeSpec:
         )
         return "\n".join(lines)
 
+    def to_dict(self) -> dict:
+        """Structured representation for the web UI."""
+        env_names = {0: "perc", 1: "swell", 2: "symmetric", 3: "sustained"}
+        return {
+            "seed": self.seed,
+            "dna": {
+                "density": round(self.dna.density, 3),
+                "spectral_center": round(self.dna.spectral_center, 3),
+                "temporal": round(self.dna.temporal, 3),
+                "sociality": round(self.dna.sociality, 3),
+                "room_scale": round(self.dna.room_scale, 3),
+            },
+            "pitch_set": {
+                "strategy": self.pitch_set_strategy,
+                "n_notes": len(self.pitch_set),
+            },
+            "species": [
+                {
+                    "name": sp.name,
+                    "archetype": sp.archetype,
+                    "source": sp.chain_spec.source,
+                    "env_type": env_names.get(
+                        sp.chain_spec.source_params.get("env_type", 0), "perc"
+                    ),
+                    "source_params": {
+                        k: round(v, 3) if isinstance(v, float) else v
+                        for k, v in sp.chain_spec.source_params.items()
+                        if k != "env_type"
+                    },
+                    "effects": [name for name, _ in sp.chain_spec.effects],
+                    "population": sp.population,
+                    "freq_range": [round(sp.freq_range[0]), round(sp.freq_range[1])],
+                    "depth_dist": sp.depth_dist,
+                }
+                for sp in self.species
+            ],
+            "medium": {
+                "reverb_roomsize": round(self.medium.reverb_roomsize, 1),
+                "reverb_time": round(self.medium.reverb_time, 1),
+                "reverb_damping": round(self.medium.reverb_damping, 2),
+                "reverb_mix": round(self.medium.reverb_mix, 2),
+                "n_resonances": len(self.medium.resonances),
+                "noise_floor_level": round(self.medium.noise_floor_level, 1),
+                "noise_floor_color": round(self.medium.noise_floor_color, 2),
+            },
+        }
+
 
 def generate_biome(seed: int) -> BiomeSpec:
     """Generate a complete biome specification from a seed. Deterministic."""

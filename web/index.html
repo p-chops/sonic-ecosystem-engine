@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sonic Ecosystem Engine</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    background: #0a0a0f;
+    color: #c0c0c0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem;
+  }
+  h1 {
+    font-size: 1.2rem;
+    font-weight: normal;
+    color: #606080;
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.1em;
+  }
+  #status {
+    font-size: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  #status.connected { color: #4a7; }
+  #status.disconnected { color: #a44; }
+  #status.connecting { color: #aa6; }
+
+  #controls {
+    display: flex;
+    gap: 0.8rem;
+    margin-bottom: 2rem;
+    align-items: center;
+  }
+  button {
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 0.5rem 1.5rem;
+    border: 1px solid #333;
+    border-radius: 4px;
+    background: #16161e;
+    color: #aaa;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  button:hover { background: #1e1e2e; border-color: #555; color: #ddd; }
+  button:active { background: #252535; }
+  button:disabled { opacity: 0.3; cursor: default; }
+  #next-btn { border-color: #4a4a7a; color: #8888cc; }
+  #next-btn:hover { border-color: #6666aa; color: #aaaaee; }
+  #seed-input {
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid #333;
+    border-radius: 4px;
+    background: #12121a;
+    color: #aaa;
+    width: 7rem;
+    text-align: center;
+  }
+  #seed-input::placeholder { color: #444; }
+  #seed-input:focus { outline: none; border-color: #555; }
+
+  .panel {
+    width: 100%;
+    max-width: 740px;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Seed display */
+  #seed-display {
+    font-size: 2rem;
+    color: #8888cc;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+
+  /* DNA bars */
+  .dna-grid {
+    display: grid;
+    grid-template-columns: 120px 1fr 40px;
+    gap: 0.3rem 0.8rem;
+    align-items: center;
+    font-size: 0.72rem;
+    margin-bottom: 1.5rem;
+  }
+  .dna-label { color: #666; text-align: right; }
+  .dna-bar-wrap {
+    height: 6px;
+    background: #151520;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .dna-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+  .dna-val { color: #555; font-size: 0.65rem; }
+
+  .dna-density .dna-bar { background: #7a6a3a; }
+  .dna-spectral .dna-bar { background: #3a5a7a; }
+  .dna-temporal .dna-bar { background: #6a3a5a; }
+  .dna-sociality .dna-bar { background: #3a7a5a; }
+  .dna-room .dna-bar { background: #5a5a7a; }
+
+  /* Species cards */
+  .species-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .species-card {
+    background: #12121a;
+    border: 1px solid #1a1a2a;
+    border-radius: 4px;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.72rem;
+    line-height: 1.5;
+  }
+  .species-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.3rem;
+  }
+  .species-name { color: #aaa; font-size: 0.8rem; }
+  .species-pop { color: #555; }
+  .species-detail { color: #666; }
+  .species-source { color: #8a8aaa; }
+  .species-env { color: #7a7a5a; }
+  .species-fx { color: #5a7a7a; }
+  .species-freq { color: #555; }
+  .tag {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 2px;
+    background: #1a1a25;
+    margin-right: 0.3rem;
+    font-size: 0.65rem;
+  }
+
+  /* Medium */
+  .medium-info {
+    background: #12121a;
+    border: 1px solid #1a1a2a;
+    border-radius: 4px;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.72rem;
+    color: #666;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.4rem 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .medium-item span { color: #888; }
+
+  /* Pitch */
+  .pitch-info {
+    font-size: 0.72rem;
+    color: #555;
+    margin-bottom: 1.5rem;
+  }
+
+  /* History */
+  #history h2 {
+    font-size: 0.75rem;
+    font-weight: normal;
+    color: #444;
+    margin-bottom: 0.5rem;
+  }
+  .history-entry {
+    font-size: 0.7rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid #151520;
+    cursor: pointer;
+    color: #555;
+  }
+  .history-entry:hover { color: #888; }
+</style>
+</head>
+<body>
+
+<h1>sonic ecosystem engine</h1>
+<div id="status" class="disconnected">disconnected</div>
+
+<div id="controls">
+  <button id="next-btn" disabled>next biome</button>
+  <input id="seed-input" type="number" placeholder="seed">
+  <button id="goto-btn" disabled>go to seed</button>
+</div>
+
+<div class="panel">
+  <div id="seed-display">--</div>
+
+  <div id="dna-section" class="dna-grid" style="display:none"></div>
+
+  <div id="species-section" class="species-list"></div>
+
+  <div id="medium-section" class="medium-info" style="display:none"></div>
+
+  <div id="pitch-section" class="pitch-info"></div>
+</div>
+
+<div class="panel" id="history">
+  <h2>history</h2>
+  <div id="history-list"></div>
+</div>
+
+<script>
+const WS_URL = `ws://${location.hostname || 'localhost'}:8765`;
+
+let ws;
+let currentSeed = null;
+const history = [];
+
+const statusEl = document.getElementById('status');
+const seedEl = document.getElementById('seed-display');
+const dnaSection = document.getElementById('dna-section');
+const speciesSection = document.getElementById('species-section');
+const mediumSection = document.getElementById('medium-section');
+const pitchSection = document.getElementById('pitch-section');
+const nextBtn = document.getElementById('next-btn');
+const gotoBtn = document.getElementById('goto-btn');
+const seedInput = document.getElementById('seed-input');
+const historyList = document.getElementById('history-list');
+
+const DNA_DIMS = [
+  { key: 'density', label: 'density', cls: 'dna-density', lo: 'sparse', hi: 'saturated' },
+  { key: 'spectral_center', label: 'spectral', cls: 'dna-spectral', lo: 'dark', hi: 'bright' },
+  { key: 'temporal', label: 'temporal', cls: 'dna-temporal', lo: 'static', hi: 'rhythmic' },
+  { key: 'sociality', label: 'sociality', cls: 'dna-sociality', lo: 'independent', hi: 'flocking' },
+  { key: 'room_scale', label: 'room scale', cls: 'dna-room', lo: 'intimate', hi: 'vast' },
+];
+
+function connect() {
+  statusEl.textContent = 'connecting...';
+  statusEl.className = 'connecting';
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    statusEl.textContent = 'connected';
+    statusEl.className = 'connected';
+    nextBtn.disabled = false;
+    gotoBtn.disabled = false;
+    ws.send(JSON.stringify({ cmd: 'info' }));
+  };
+
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if ((data.event === 'biome_change' || data.event === 'info') && data.seed != null) {
+      updateBiome(data);
+    }
+  };
+
+  ws.onclose = () => {
+    statusEl.textContent = 'disconnected \u2014 reconnecting...';
+    statusEl.className = 'disconnected';
+    nextBtn.disabled = true;
+    gotoBtn.disabled = true;
+    setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function updateBiome(data) {
+  if (currentSeed != null && currentSeed !== data.seed) {
+    history.unshift({ seed: currentSeed, time: new Date() });
+    renderHistory();
+  }
+  currentSeed = data.seed;
+  seedEl.textContent = `seed ${data.seed}`;
+
+  if (data.dna) renderDNA(data.dna);
+  if (data.species) renderSpecies(data.species);
+  if (data.medium) renderMedium(data.medium);
+  if (data.pitch_set) renderPitch(data.pitch_set);
+}
+
+function renderDNA(dna) {
+  dnaSection.style.display = 'grid';
+  dnaSection.innerHTML = DNA_DIMS.map(d => {
+    const v = dna[d.key] || 0;
+    const pct = (v * 100).toFixed(0);
+    return `
+      <div class="dna-label">${d.label}</div>
+      <div class="dna-bar-wrap ${d.cls}">
+        <div class="dna-bar" style="width:${pct}%"></div>
+      </div>
+      <div class="dna-val">${pct}%</div>
+    `;
+  }).join('');
+}
+
+function renderSpecies(species) {
+  speciesSection.innerHTML = species.map(sp => {
+    const fxTags = sp.effects.map(f =>
+      `<span class="tag species-fx">${f.replace('fx_','')}</span>`
+    ).join('');
+
+    const srcName = sp.source.replace('src_', '');
+
+    // Key source params (skip boring ones)
+    const interesting = Object.entries(sp.source_params || {}).filter(
+      ([k]) => !['noise_type','impulse_type','waveform'].includes(k)
+    );
+    const paramStr = interesting.map(([k,v]) =>
+      `${k}=${typeof v === 'number' ? (Number.isInteger(v) ? v : v.toFixed(2)) : v}`
+    ).join(' ');
+
+    return `
+      <div class="species-card">
+        <div class="species-header">
+          <span class="species-name">${sp.archetype}</span>
+          <span class="species-pop">pop ${sp.population} \u00b7 ${sp.depth_dist}</span>
+        </div>
+        <div class="species-detail">
+          <span class="species-source">${srcName}</span>
+          <span class="species-env tag">${sp.env_type}</span>
+          ${fxTags}
+        </div>
+        ${paramStr ? `<div class="species-detail" style="margin-top:0.2rem;color:#555">${paramStr}</div>` : ''}
+        <div class="species-freq">${sp.freq_range[0]}\u2013${sp.freq_range[1]} Hz</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderMedium(med) {
+  mediumSection.style.display = 'grid';
+  mediumSection.innerHTML = `
+    <div class="medium-item">room <span>${med.reverb_roomsize}m</span></div>
+    <div class="medium-item">decay <span>${med.reverb_time}s</span></div>
+    <div class="medium-item">damping <span>${(med.reverb_damping * 100).toFixed(0)}%</span></div>
+    <div class="medium-item">wet mix <span>${(med.reverb_mix * 100).toFixed(0)}%</span></div>
+    <div class="medium-item">resonances <span>${med.n_resonances}</span></div>
+    <div class="medium-item">noise floor <span>${med.noise_floor_level}dB</span></div>
+  `;
+}
+
+function renderPitch(pitch) {
+  pitchSection.textContent = `pitch: ${pitch.strategy.replace('_',' ')} \u00b7 ${pitch.n_notes} notes`;
+}
+
+function renderHistory() {
+  historyList.innerHTML = history.slice(0, 20).map(h =>
+    `<div class="history-entry" onclick="goToSeed(${h.seed})">
+      seed ${h.seed} \u2014 ${timeSince(h.time)} ago
+    </div>`
+  ).join('');
+}
+
+function timeSince(date) {
+  const s = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s/60)}m`;
+  return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
+}
+
+function goToSeed(seed) {
+  if (ws && ws.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ cmd: 'next', seed }));
+}
+
+nextBtn.addEventListener('click', () => {
+  if (ws && ws.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ cmd: 'next' }));
+});
+
+gotoBtn.addEventListener('click', () => {
+  const seed = parseInt(seedInput.value);
+  if (!isNaN(seed)) { goToSeed(seed); seedInput.value = ''; }
+});
+
+seedInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') gotoBtn.click(); });
+
+setInterval(renderHistory, 30000);
+connect();
+</script>
+</body>
+</html>

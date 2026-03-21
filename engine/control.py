@@ -8,8 +8,8 @@ Commands (client → server):
   {"cmd": "info"}                 — request current biome info
 
 Notifications (server → clients):
-  {"event": "biome_change", "seed": 12345, "summary": "..."}
-  {"event": "info", "seed": 12345, "summary": "..."}
+  {"event": "biome_change", "seed": 12345, "biome": {...}}
+  {"event": "info", "seed": 12345, "biome": {...}}
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import websockets
 from websockets.asyncio.server import serve, ServerConnection
 
 if TYPE_CHECKING:
-    pass
+    from generation.derive import BiomeSpec
 
 log = logging.getLogger(__name__)
 
@@ -36,8 +36,7 @@ class ControlServer:
         self.next_event = next_event
         self._requested_seed: int | None = None
         self._clients: set[ServerConnection] = set()
-        self._current_seed: int | None = None
-        self._current_summary: str | None = None
+        self._current_biome: dict | None = None
         self._server = None
 
     @property
@@ -47,23 +46,21 @@ class ControlServer:
         self._requested_seed = None
         return seed
 
-    def set_current_biome(self, seed: int, summary: str):
+    def set_current_biome(self, biome: BiomeSpec):
         """Update current biome info and notify all connected clients."""
-        self._current_seed = seed
-        self._current_summary = summary
+        self._current_biome = biome.to_dict()
         msg = json.dumps({
             "event": "biome_change",
-            "seed": seed,
-            "summary": summary,
+            **self._current_biome,
         })
-        self._broadcast(msg)
+        asyncio.ensure_future(self._broadcast(msg))
 
-    def _broadcast(self, msg: str):
+    async def _broadcast(self, msg: str):
         for ws in list(self._clients):
             try:
-                ws.send(msg)
+                await ws.send(msg)
             except Exception:
-                pass
+                self._clients.discard(ws)
 
     async def _handler(self, ws: ServerConnection):
         self._clients.add(ws)
@@ -88,8 +85,7 @@ class ControlServer:
                 elif cmd == "info":
                     await ws.send(json.dumps({
                         "event": "info",
-                        "seed": self._current_seed,
-                        "summary": self._current_summary,
+                        **(self._current_biome or {}),
                     }))
 
                 else:

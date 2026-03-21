@@ -141,19 +141,22 @@ class VoiceChain:
 
     def set_pan(self, pan: float):
         """Update the pan position."""
-        self.sc.set(self.output_node, pan=pan)
+        if not self._torn_down:
+            self.sc.set(self.output_node, pan=pan)
 
     def set_amp(self, amp: float):
         """Update the output amplitude."""
-        self.sc.set(self.output_node, amp=amp)
+        if not self._torn_down:
+            self.sc.set(self.output_node, amp=amp)
 
     def set_send(self, send: float):
         """Update the medium bus send level."""
-        self.sc.set(self.output_node, send=send)
+        if not self._torn_down:
+            self.sc.set(self.output_node, send=send)
 
     def set_effect_param(self, effect_index: int, **params):
         """Update parameters on a specific effect in the chain."""
-        if 0 <= effect_index < len(self.effect_nodes):
+        if not self._torn_down and 0 <= effect_index < len(self.effect_nodes):
             self.sc.set(self.effect_nodes[effect_index], **params)
 
     def teardown(self):

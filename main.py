@@ -94,7 +94,7 @@ async def run(args):
             print()
 
             await manager.start_biome(biome)
-            control.set_current_biome(seed, summary)
+            control.set_current_biome(biome)
 
             # Wait for auto-advance timer OR manual skip
             next_event.clear()
