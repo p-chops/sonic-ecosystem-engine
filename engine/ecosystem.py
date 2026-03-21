@@ -132,9 +132,27 @@ class EcosystemManager:
         self.sc = sc
         self.current: Ecosystem | None = None
         self._run_task: asyncio.Task | None = None
+        self._limiter_node: int | None = None
+
+    def _ensure_limiter(self):
+        """Create a single persistent limiter on bus 0 if not already running."""
+        if self._limiter_node is None:
+            # Limiter group goes at the very end of the node tree
+            from engine.bridge import ADD_TO_TAIL
+            self._limiter_group = self.sc.new_group()
+            self._limiter_node = self.sc.synth(
+                "med_limiter",
+                target_group=self._limiter_group,
+                add_action=ADD_TO_TAIL,
+                **{"in": 0, "out": 0},
+                threshold=-6,
+                ratio=4,
+                makeup=6,
+            )
 
     async def start_biome(self, biome: BiomeSpec):
         """Start a new biome, transitioning from any current one."""
+        self._ensure_limiter()
         if self.current is not None:
             await self._transition_to(biome)
         else:
@@ -208,4 +226,5 @@ class EcosystemManager:
                     pass
             await self.current.teardown()
             self.current = None
+        self._limiter_node = None
         self.sc.free_all()

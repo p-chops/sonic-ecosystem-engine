@@ -107,15 +107,8 @@ class Medium:
         self.nodes.append(node)
         self._noise_node = node
 
-        # 5. Limiter (reads/writes stereo main bus)
-        node = sc.synth("med_limiter", target_group=self.group,
-                        add_action=ADD_TO_TAIL,
-                        **{"in": 0, "out": 0},
-                        threshold=spec.limiter_threshold,
-                        ratio=4,
-                        makeup=6)
-        self.nodes.append(node)
-        self._limiter_node = node
+        # Limiter is managed globally by EcosystemManager, not per-medium.
+        self._limiter_node = None
 
     # -- Instant setters -------------------------------------------------------
 
@@ -145,15 +138,6 @@ class Medium:
     def set_eq(self, **params):
         if params:
             self.sc.set(self._eq_node, **params)
-
-    def set_limiter(self, threshold: float | None = None, ratio: float | None = None):
-        params = {}
-        if threshold is not None:
-            params["threshold"] = threshold
-        if ratio is not None:
-            params["ratio"] = ratio
-        if params:
-            self.sc.set(self._limiter_node, **params)
 
     # -- Gradual fades ---------------------------------------------------------
 
