@@ -96,8 +96,8 @@ def _generate_resonances(
         # Spread in log space
         offset = rng.uniform(-spread_octaves / 2, spread_octaves / 2)
         freq = center_hz * (2 ** offset)
-        freq = max(40, min(freq, 16000))
-        q = rng.uniform(5, 40)
+        freq = max(40, min(freq, 3000))  # cap to avoid high-pitched ringing
+        q = rng.uniform(5, 20)          # lower max Q to reduce ring duration
         amp = lerp(1.0, 0.2, i / max(n - 1, 1))  # earlier resonances louder
         resonances.append(Resonance(freq=freq, q=q, amp=amp))
     return resonances
@@ -173,7 +173,8 @@ ARCHETYPE_EFFECT_MULTS: dict[str, dict[str, float]] = {
 }
 
 
-def _derive_effects(dna: MacroDNA, rng: random.Random, archetype: str) -> list[tuple[str, dict]]:
+def _derive_effects(dna: MacroDNA, rng: random.Random, archetype: str,
+                    source: str = "") -> list[tuple[str, dict]]:
     """Derive an effect chain from DNA, weighted by archetype."""
     effects = []
     mults = ARCHETYPE_EFFECT_MULTS.get(archetype, {})
@@ -212,14 +213,24 @@ def _derive_effects(dna: MacroDNA, rng: random.Random, archetype: str) -> list[t
 
     if rng.random() < min(0.2 * mults.get("fx_ring", 1.0), 0.95):
         effects.append(("fx_ring", {
-            "mod_freq": lerp(20, 2000, rng.random()),
-            "mod_depth": rng.uniform(0.3, 1.0),
+            "mod_freq": lerp(20, 800, rng.random()),  # cap to avoid harsh high sidebands
+            "mod_depth": rng.uniform(0.3, 0.8),
         }))
 
     if rng.random() < min(0.2 * mults.get("fx_chorus", 1.0), 0.95):
         effects.append(("fx_chorus", {
             "rate": rng.uniform(0.1, 1.0),
             "depth": rng.uniform(0.001, 0.008),
+            "voices": rng.randint(2, 4),
+        }))
+
+    # Sine sources must have at least one modulation effect to avoid dullness
+    if source == "src_sine" and not any(name in ("fx_chorus", "fx_delay", "fx_ring", "fx_fold")
+                                        for name, _ in effects):
+        # Guarantee chorus — natural thickening for sine
+        effects.append(("fx_chorus", {
+            "rate": rng.uniform(0.1, 0.8),
+            "depth": rng.uniform(0.002, 0.008),
             "voices": rng.randint(2, 4),
         }))
 
@@ -274,10 +285,10 @@ def _derive_clicker_params(dna: MacroDNA, rng: random.Random) -> dict:
 def _derive_drone_params(dna: MacroDNA, rng: random.Random) -> dict:
     return {
         "drift_rate": (
-            lerp(1.5, 4.0, dna.temporal),
-            lerp(4.0, 10.0, 1 - dna.temporal),
+            lerp(8.0, 15.0, dna.temporal),
+            lerp(15.0, 30.0, 1 - dna.temporal),
         ),
-        "drift_range": lerp(0.03, 0.2, rng.random()),
+        "drift_range": lerp(0.005, 0.03, rng.random()),  # microtonal — barely perceptible
         "inverse_coupling": dna.sociality > 0.3,
         # Pan wander
         "pan_drift_rate": rng.uniform(0.02, 0.15),  # Hz — very slow LFO
@@ -347,11 +358,18 @@ def _derive_source_params(source: str, dna: MacroDNA, rng: random.Random,
     env_type = rng.choices([0, 1, 2, 3], weights=env_weights, k=1)[0]
 
     if source == "src_sine":
+        # Drones: fewer partials, steeper falloff — avoid sustained high-freq tinnitus
+        if archetype == "drone":
+            n_partials = rng.choice([2, 3, 4])
+            falloff = rng.uniform(0.3, 0.6)
+        else:
+            n_partials = rng.choice([2, 3, 4, 5, 6])
+            falloff = rng.uniform(0.3, 0.7)
         return {
             "env_type": env_type,
-            "n_partials": rng.choice([1, 1, 2, 3, 4, 5, 6, 8]),
-            "partial_spread": rng.uniform(0, 0.8),
-            "partial_falloff": rng.uniform(0.3, 0.9),
+            "n_partials": n_partials,
+            "partial_spread": rng.uniform(0.05, 0.4),
+            "partial_falloff": falloff,
         }
 
     elif source == "src_fm":
@@ -380,7 +398,7 @@ def _derive_source_params(source: str, dna: MacroDNA, rng: random.Random,
         return {
             "env_type": env_type,
             "impulse_type": rng.choice([0, 0, 1, 2]),
-            "reson_q": rng.uniform(2, 50),
+            "reson_q": rng.uniform(2, 25),  # cap Q to avoid sustained ringing
         }
 
     elif source == "src_formant":
@@ -435,21 +453,26 @@ def _derive_single_species(
     rng: random.Random,
 ) -> Species:
     """Derive a single species from DNA and archetype."""
-    # Source selection
+    # Source selection — filter out incompatible sources per archetype
     source_weights = {name: fn(dna) for name, fn in SOURCE_WEIGHTS.items()}
+    if archetype == "drone":
+        # Click and grain sources make no sense as sustained drones
+        source_weights.pop("src_click", None)
+        source_weights.pop("src_grain", None)
     source = _weighted_choice(source_weights, rng)
 
     # Source-specific parameters (the species' timbral identity)
     source_params = _derive_source_params(source, dna, rng, archetype=archetype)
 
     # Effect chain
-    effects = _derive_effects(dna, rng, archetype)
+    effects = _derive_effects(dna, rng, archetype, source=source)
 
-    # Frequency range — drones are pushed low
+    # Frequency range — drones are pushed low, capped to avoid tinnitus
     if archetype == "drone":
-        freq_lo = lerp(30, 120, 1 - dna.spectral_center) * (1 + rng.gauss(0, 0.1))
+        freq_lo = lerp(30, 100, 1 - dna.spectral_center) * (1 + rng.gauss(0, 0.1))
         freq_lo = max(20, freq_lo)
-        freq_hi = freq_lo * lerp(2, 4, max(0, min(1, dna.spectral_center + rng.random() * 0.2)))
+        freq_hi = freq_lo * lerp(2, 3, max(0, min(1, dna.spectral_center + rng.random() * 0.2)))
+        freq_hi = min(freq_hi, 300)  # hard cap — sustained tones above this are unpleasant
     else:
         freq_lo = lerp(40, 400, 1 - dna.spectral_center) * (1 + rng.gauss(0, 0.2))
         freq_lo = max(20, freq_lo)
@@ -616,16 +639,16 @@ def estimate_biome_energy(biome: BiomeSpec) -> float:
     total = 0.0
     for sp in biome.species:
         expected_depth = _EXPECTED_DEPTH.get(sp.depth_dist, 0.5)
-        base_amp = lerp(0.5, 0.03, expected_depth)
+        base_amp = lerp(0.5, 0.12, expected_depth)
         source_gain = _SOURCE_GAIN_EST.get(sp.chain_spec.source, 1.0)
         amp = base_amp * source_gain
 
         if sp.archetype == "drone":
-            amp *= 0.3
+            amp *= 0.4
 
         size = sp.params.get("size")
         if size is not None:
-            amp *= lerp(0.4, 1.0, size)
+            amp *= lerp(0.6, 1.0, size)
 
         duty = _DUTY_CYCLE.get(sp.archetype, 0.3)
         total += amp * sp.population * duty

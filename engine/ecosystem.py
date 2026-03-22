@@ -170,7 +170,7 @@ class EcosystemManager:
 
     # Energy estimation reference — a "typical" biome's estimated energy.
     # Biomes below this get boosted, above get attenuated.
-    _REFERENCE_ENERGY = 0.5
+    _REFERENCE_ENERGY = 1.0
     # Makeup gain range (dB). Default is 6dB; estimation shifts within this range.
     _MAKEUP_MIN = 0.0
     _MAKEUP_MAX = 18.0

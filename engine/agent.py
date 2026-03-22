@@ -67,16 +67,16 @@ class Agent:
         #
         source_gain = _SOURCE_GAIN.get(species.chain_spec.source, 1.0)
 
-        base_amp = lerp(0.5, 0.03, self.depth)  # ~24dB foreground/background spread
+        base_amp = lerp(0.5, 0.12, self.depth)  # ~12dB foreground/background spread
         self.amp = base_amp * source_gain
 
         if species.archetype == "drone":
-            self.amp *= 0.3  # drones sit underneath
+            self.amp *= 0.4  # drones sit underneath but stay present
 
         # Size-based amplitude for callers: small/high creatures are quieter
         size = species.params.get("size")
         if size is not None:
-            self.amp *= lerp(0.4, 1.0, size)  # small=0.4x, large=1.0x
+            self.amp *= lerp(0.6, 1.0, size)  # small=0.6x, large=1.0x
 
         self.send = lerp(0.1, 0.8, self.depth)
         if species.archetype == "drone":
