@@ -142,6 +142,7 @@ class Ecosystem:
             "activity": round(self.state.activity, 3),
             "spawning": self._spawning,
             "species_counts": species_counts,
+            "nodes": self.sc.node_count_estimate(),
         }
 
     async def teardown(self):
@@ -244,6 +245,11 @@ class EcosystemManager:
                 self._target_makeup = max(self._MAKEUP_MIN,
                     min(self._MAKEUP_MAX, self._MAKEUP_DEFAULT + compensation_db))
 
+            # Log node counts for leak detection
+            counts = self.sc.node_count_estimate()
+            log.debug("Nodes: %d persistent, %d transient (overcounted), ~%d total",
+                      counts["persistent"], counts["transient"], counts["total_estimate"])
+
             # Smooth exponential approach to target
             error = self._target_makeup - self._current_makeup
             if abs(error) > 0.1:  # don't bother with sub-0.1dB adjustments
@@ -334,6 +340,40 @@ class EcosystemManager:
     def _push_status(self, status: dict):
         if self._on_status:
             self._on_status(status)
+
+    async def panic(self, biome: BiomeSpec):
+        """Nuclear option — free all scsynth nodes and start a fresh biome.
+
+        Skips graceful transitions. Use when nodes have leaked or audio is broken.
+        """
+        log.warning("PANIC — freeing all nodes")
+        # Kill everything on the SC server
+        self.sc.free_all()
+        # Reset Python-side state
+        if self._agc_task is not None:
+            self._agc_task.cancel()
+            try:
+                await self._agc_task
+            except asyncio.CancelledError:
+                pass
+            self._agc_task = None
+        if self._run_task is not None:
+            self._run_task.cancel()
+            try:
+                await self._run_task
+            except asyncio.CancelledError:
+                pass
+        self.current = None
+        self._limiter_node = None
+        self._current_makeup = self._MAKEUP_DEFAULT
+        # Start fresh
+        self._ensure_limiter()
+        self._target_makeup = self._compute_makeup(biome)
+        self._set_makeup(self._target_makeup)
+        self._start_agc()
+        self.current = Ecosystem(biome, self.sc)
+        self._run_task = asyncio.create_task(self.current.run())
+        log.info("PANIC recovery complete — new biome seed=%d", biome.seed)
 
     async def stop(self):
         """Stop everything."""

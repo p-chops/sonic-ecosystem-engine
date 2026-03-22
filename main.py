@@ -86,6 +86,7 @@ async def run(args):
     print(f"  Control: stdin ('n') or ws://localhost:{args.ws_port}")
     print(f"{'=' * 60}\n")
 
+    panic = False
     try:
         while True:
             biome = generate_biome(seed)
@@ -95,7 +96,10 @@ async def run(args):
             print()
 
             control.set_current_biome(biome)
-            await manager.start_biome(biome)
+            if panic:
+                await manager.panic(biome)
+            else:
+                await manager.start_biome(biome)
 
             # Wait for auto-advance timer OR manual skip, pushing status updates
             next_event.clear()
@@ -112,6 +116,9 @@ async def run(args):
                         control.push_status(manager.current.get_status())
             else:
                 print(">> Auto-advancing...")
+
+            # Check if this was a panic request
+            panic = control.is_panic
 
             # Use requested seed if provided, otherwise random
             requested = control.requested_seed

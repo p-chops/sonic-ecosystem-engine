@@ -32,6 +32,11 @@ class SCBridge:
         self.next_node_id = 2000
         self.next_bus_id = 16  # buses 0-15 reserved for hardware I/O
         self._freed_buses: list[tuple[int, int]] = []  # (bus_id, channels)
+        # Node tracking — Python-side estimate of live scsynth nodes.
+        # Source synths self-free via doneAction:2, so this overcounts slightly,
+        # but it's a useful ceiling estimate for detecting leaks.
+        self._live_nodes: set[int] = set()
+        self._transient_nodes: set[int] = set()  # source synths (self-freeing)
 
     # -- Node ID allocation --------------------------------------------------
 
@@ -64,11 +69,13 @@ class SCBridge:
         name: str,
         target_group: int | None = None,
         add_action: int = ADD_TO_HEAD,
+        transient: bool = False,
         **params,
     ) -> int:
         """Create a synth node. Returns the allocated node ID.
 
         Params are sent as key-value pairs. Values are coerced to float.
+        Set transient=True for self-freeing source synths (doneAction:2).
         """
         node_id = self._alloc_node_id()
         target = target_group if target_group is not None else 1
@@ -78,6 +85,10 @@ class SCBridge:
         self.client.send_message(
             "/s_new", [name, node_id, add_action, target] + args
         )
+        if transient:
+            self._transient_nodes.add(node_id)
+        else:
+            self._live_nodes.add(node_id)
         return node_id
 
     # -- Node control ---------------------------------------------------------
@@ -92,6 +103,8 @@ class SCBridge:
     def free(self, node_id: int):
         """Free a node (synth or group). Freeing a group frees all children."""
         self.client.send_message("/n_free", [node_id])
+        self._live_nodes.discard(node_id)
+        self._transient_nodes.discard(node_id)
 
     # -- Groups ---------------------------------------------------------------
 
@@ -99,6 +112,7 @@ class SCBridge:
         """Create a new group node. Returns the group ID."""
         group_id = self._alloc_node_id()
         self.client.send_message("/g_new", [group_id, add_action, target])
+        self._live_nodes.add(group_id)
         return group_id
 
     # -- Bundled messages (sample-accurate timing) ----------------------------
@@ -157,6 +171,21 @@ class SCBridge:
     def free_all(self):
         """Free all nodes in the default group. Use for panic/reset."""
         self.client.send_message("/g_freeAll", [1])
+        self._live_nodes.clear()
+        self._transient_nodes.clear()
+
+    def node_count_estimate(self) -> dict:
+        """Return Python-side estimate of live node counts.
+
+        'persistent' = groups + effects + outputs + medium (freed explicitly).
+        'transient' = source synths (self-free via doneAction:2, so this overcounts).
+        Useful for leak detection — persistent count should stay bounded.
+        """
+        return {
+            "persistent": len(self._live_nodes),
+            "transient": len(self._transient_nodes),
+            "total_estimate": len(self._live_nodes) + len(self._transient_nodes),
+        }
 
     def quit(self):
         """Shut down scsynth."""
@@ -170,7 +199,7 @@ def boot_scsynth(
     num_buffers: int = 1024,
     num_audio_buses: int = 1024,
     num_control_buses: int = 4096,
-    max_nodes: int = 4096,
+    max_nodes: int = 8192,
     max_synthdefs: int = 1024,
     mem_size: int = 65536,  # RT memory in KB (default 8192 = 8MB)
 ) -> subprocess.Popen:

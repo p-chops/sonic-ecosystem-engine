@@ -53,6 +53,8 @@
   button:disabled { opacity: 0.3; cursor: default; }
   #next-btn { border-color: #4a4a7a; color: #8888cc; }
   #next-btn:hover { border-color: #6666aa; color: #aaaaee; }
+  #panic-btn { border-color: #7a3a3a; color: #cc6666; }
+  #panic-btn:hover { border-color: #aa4444; color: #ee8888; }
   #seed-input {
     font-family: inherit;
     font-size: 0.85rem;
@@ -216,6 +218,7 @@
   <button id="next-btn" disabled>next biome</button>
   <input id="seed-input" type="number" placeholder="seed">
   <button id="goto-btn" disabled>go to seed</button>
+  <button id="panic-btn" disabled>panic</button>
 </div>
 
 <div class="panel">
@@ -283,6 +286,7 @@ const liveActivityBar = document.getElementById('live-activity-bar');
 const liveSpawning = document.getElementById('live-spawning-indicator');
 const nextBtn = document.getElementById('next-btn');
 const gotoBtn = document.getElementById('goto-btn');
+const panicBtn = document.getElementById('panic-btn');
 const seedInput = document.getElementById('seed-input');
 const historyList = document.getElementById('history-list');
 
@@ -304,6 +308,7 @@ function connect() {
     statusEl.className = 'connected';
     nextBtn.disabled = false;
     gotoBtn.disabled = false;
+    panicBtn.disabled = false;
     ws.send(JSON.stringify({ cmd: 'info' }));
   };
 
@@ -321,6 +326,7 @@ function connect() {
     statusEl.className = 'disconnected';
     nextBtn.disabled = true;
     gotoBtn.disabled = true;
+    panicBtn.disabled = true;
     setTimeout(connect, 3000);
   };
 
@@ -446,6 +452,11 @@ nextBtn.addEventListener('click', () => {
 gotoBtn.addEventListener('click', () => {
   const seed = parseInt(seedInput.value);
   if (!isNaN(seed)) { goToSeed(seed); seedInput.value = ''; }
+});
+
+panicBtn.addEventListener('click', () => {
+  if (ws && ws.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ cmd: 'panic' }));
 });
 
 seedInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') gotoBtn.click(); });

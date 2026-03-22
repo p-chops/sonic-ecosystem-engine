@@ -233,23 +233,23 @@ def _derive_caller_params(dna: MacroDNA, rng: random.Random, size: float = 0.5) 
     return {
         # Small callers: more notes, chattery. Large callers: fewer notes, deliberate.
         "song_length": rng.randint(
-            int(lerp(5, 2, size)),
-            int(lerp(10, 6, size)),
+            int(lerp(8, 4, size)),
+            int(lerp(16, 10, size)),
         ),
         # Small: short notes. Large: long sustained notes.
         "note_dur_range": (
-            lerp(0.03, 0.15, size),
-            lerp(0.12, 0.8, size),
+            lerp(0.02, 0.08, size),
+            lerp(0.08, 0.5, size),
         ),
         # Small: tight gaps. Large: wide gaps.
         "note_gap": (
-            lerp(0.01, 0.04, size),
-            lerp(0.04, 0.25, size),
+            lerp(0.005, 0.02, size),
+            lerp(0.02, 0.12, size),
         ),
         # Small: short rests. Large: long rests.
         "base_pause": (
-            lerp(0.5, 2.0, size),
-            lerp(2.0, 10.0, size),
+            lerp(0.3, 1.2, size),
+            lerp(1.5, 6.0, size),
         ),
         "glide_prob": lerp(0.05, 0.4, rng.random()),
         "transpose_prob": lerp(0.05, 0.3, rng.random()),

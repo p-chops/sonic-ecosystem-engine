@@ -5,6 +5,7 @@ Accepts JSON commands and pushes biome change notifications.
 Commands (client → server):
   {"cmd": "next"}                 — skip to next biome
   {"cmd": "next", "seed": 42}    — skip to a specific seed
+  {"cmd": "panic"}               — free all nodes, start fresh biome
   {"cmd": "info"}                 — request current biome info
 
 Notifications (server → clients):
@@ -35,6 +36,7 @@ class ControlServer:
         self.port = port
         self.next_event = next_event
         self._requested_seed: int | None = None
+        self._panic: bool = False
         self._clients: set[ServerConnection] = set()
         self._current_biome: dict | None = None
         self._server = None
@@ -45,6 +47,13 @@ class ControlServer:
         seed = self._requested_seed
         self._requested_seed = None
         return seed
+
+    @property
+    def is_panic(self) -> bool:
+        """True if the last skip was a panic (free all, no crossfade)."""
+        val = self._panic
+        self._panic = False
+        return val
 
     def set_current_biome(self, biome: BiomeSpec):
         """Update current biome info and notify all connected clients."""
@@ -88,6 +97,13 @@ class ControlServer:
                     self.next_event.set()
                     await ws.send(json.dumps({"ok": True, "cmd": "next"}))
                     log.info("Next biome requested (seed=%s)", self._requested_seed)
+
+                elif cmd == "panic":
+                    self._requested_seed = data.get("seed")  # None = random
+                    self._panic = True
+                    self.next_event.set()
+                    await ws.send(json.dumps({"ok": True, "cmd": "panic"}))
+                    log.info("PANIC — free all, fresh start (seed=%s)", self._requested_seed)
 
                 elif cmd == "info":
                     await ws.send(json.dumps({

@@ -98,6 +98,7 @@ class VoiceChain:
             self.spec.source,
             target_group=self.group,
             add_action=ADD_TO_HEAD,
+            transient=True,  # self-frees via doneAction:2
             out=self.input_bus,
             **params,
         )
