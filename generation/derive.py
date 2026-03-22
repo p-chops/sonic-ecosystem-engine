@@ -577,6 +577,66 @@ class BiomeSpec:
         }
 
 
+# -- Biome energy estimation ---------------------------------------------------
+
+# Expected depth by distribution type (analytical mean of each distribution)
+_EXPECTED_DEPTH = {
+    "sqrt": 2 / 3,      # E[sqrt(U)] = 2/3
+    "uniform": 0.5,
+    "close": 1 / 3,      # E[U^2] = 1/3
+}
+
+# Approximate duty cycle by archetype (fraction of time producing sound)
+_DUTY_CYCLE = {
+    "caller":    0.30,
+    "clicker":   0.15,
+    "drone":     1.00,   # continuous
+    "swarm":     0.40,
+    "responder": 0.10,   # reactive, infrequent
+}
+
+# Mirrors engine.agent._SOURCE_GAIN — duplicated here to avoid circular import
+_SOURCE_GAIN_EST = {
+    "src_sine":    1.2,
+    "src_noise":   0.5,
+    "src_click":   0.8,
+    "src_fm":      1.0,
+    "src_formant": 0.7,
+    "src_grain":   0.6,
+    "src_string":  1.0,
+}
+
+
+def estimate_biome_energy(biome: BiomeSpec) -> float:
+    """Estimate the expected total amplitude energy of a biome at steady state.
+
+    Used by the EcosystemManager to set per-biome limiter makeup gain so that
+    output loudness is consistent across biomes with very different densities.
+    """
+    total = 0.0
+    for sp in biome.species:
+        expected_depth = _EXPECTED_DEPTH.get(sp.depth_dist, 0.5)
+        base_amp = lerp(0.5, 0.03, expected_depth)
+        source_gain = _SOURCE_GAIN_EST.get(sp.chain_spec.source, 1.0)
+        amp = base_amp * source_gain
+
+        if sp.archetype == "drone":
+            amp *= 0.3
+
+        size = sp.params.get("size")
+        if size is not None:
+            amp *= lerp(0.4, 1.0, size)
+
+        duty = _DUTY_CYCLE.get(sp.archetype, 0.3)
+        total += amp * sp.population * duty
+
+    # Reverb accumulates energy in the tail — wetter biomes are louder
+    reverb_factor = 1.0 + biome.medium.reverb_mix * 0.5
+    total *= reverb_factor
+
+    return total
+
+
 def generate_biome(seed: int) -> BiomeSpec:
     """Generate a complete biome specification from a seed. Deterministic."""
     rng = random.Random(seed)

@@ -94,15 +94,16 @@ SynthDef(\med_noise_floor, { |out=0, level=(-40), color=0.5, filter=8000|
 // threshold: level in dB above which compression kicks in
 // ratio: compression ratio (1=none, higher=more limiting)
 // makeup: post-compression gain in dB (brings quiet biomes up)
-SynthDef(\med_limiter, { |in=0, out=0, threshold=(-12), ratio=4, makeup=6|
+SynthDef(\med_limiter, { |in=0, out=0, threshold=(-18), ratio=8, makeup=6,
+	attack=0.1, release=1.0|
 	var sig = In.ar(in, 2);  // stereo at this point
-	// Compander as a compressor/limiter
+	// Compander as a slow leveler — long attack/release smooths biome energy
 	sig = Compander.ar(sig, sig,
 		thresh: threshold.dbamp,
 		slopeBelow: 1,
 		slopeAbove: (1 / ratio.max(1)),
-		clampTime: 0.01,
-		relaxTime: 0.15
+		clampTime: attack.clip(0.001, 1),
+		relaxTime: release.clip(0.01, 10)
 	);
 	// Makeup gain
 	sig = sig * makeup.dbamp;
