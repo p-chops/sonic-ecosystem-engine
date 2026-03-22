@@ -20,3 +20,7 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# project
+PLAN.md
+CLAUDE.md
