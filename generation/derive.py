@@ -478,6 +478,15 @@ def _derive_single_species(
         freq_lo = max(20, freq_lo)
         freq_hi = freq_lo * lerp(2, 8, max(0, min(1, dna.spectral_center + rng.random() * 0.3)))
 
+        # High register shift — insects, birds, chirps
+        # Callers and swarms have a good chance to be pushed into the upper octaves
+        if archetype in ("caller", "swarm") and rng.random() < 0.55:
+            octaves_up = rng.choices([2, 3, 4, 5], weights=[1, 2, 2, 1], k=1)[0]
+            shift = 2 ** octaves_up
+            freq_lo *= shift
+            freq_hi *= shift
+            freq_hi = min(freq_hi, 12000)  # cap at 12kHz
+
     # Population
     pop_lo, pop_hi = ARCHETYPE_POP_RANGES[archetype]
     population = max(1, int(lerp(pop_lo, pop_hi, dna.density)))

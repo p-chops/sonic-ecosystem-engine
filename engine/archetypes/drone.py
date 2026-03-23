@@ -133,6 +133,7 @@ class DroneBehavior(Behavior):
             if self.drone_node and not self.agent.voice._torn_down:
                 self.agent.sc.set(self.drone_node, amp=self.current_amp)
             await asyncio.sleep(step_dur)
+        self.agent.has_voiced = True
 
     async def fade_out(self):
         """Gradually fade the drone to silence. Called before teardown."""

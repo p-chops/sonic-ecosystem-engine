@@ -271,6 +271,7 @@ let ws;
 let currentSeed = null;
 let currentSpecies = [];
 let lastSpeciesCounts = {};
+let lastSpeciesAgents = {};
 const historyLog = [];
 
 const statusEl = document.getElementById('status');
@@ -348,6 +349,7 @@ function updateBiome(data) {
   if (data.pitch_set) renderPitch(data.pitch_set);
   liveStatus.style.display = 'flex';
   lastSpeciesCounts = {};
+  lastSpeciesAgents = {};
   renderPopulation();
 }
 
@@ -359,6 +361,7 @@ function updateLiveStatus(data) {
   liveSpawning.style.display = data.transitioning ? 'flex' : 'none';
 
   lastSpeciesCounts = data.species_counts || {};
+  lastSpeciesAgents = data.species_agents || {};
   renderPopulation();
 }
 
@@ -367,17 +370,33 @@ function renderPopulation() {
     populationEl.innerHTML = '<span class="pop-empty">waiting...</span>';
     return;
   }
-  // Build emoji string — one emoji per live agent, grouped by species
-  let emojis = '';
+  // Build sized emoji spans — each agent's emoji scaled by its amplitude
+  let html = '';
+  let total = 0;
   for (const sp of currentSpecies) {
     const emoji = ARCHETYPE_EMOJI[sp.archetype] || '❓';
-    const count = lastSpeciesCounts[sp.name] || 0;
-    emojis += emoji.repeat(count);
+    const amps = lastSpeciesAgents[sp.name] || [];
+    total += amps.length;
+    for (const amp of amps) {
+      // Map amplitude to font size: quiet agents are small, loud are large
+      // amp typically ranges ~0.02–0.5; map to 0.5rem–2.2rem
+      const t = Math.min(amp / 0.4, 1);
+      const size = 0.5 + t * 1.7;
+      html += `<span style="font-size:${size.toFixed(2)}rem;line-height:1">${emoji}</span>`;
+    }
   }
-  const total = Object.values(lastSpeciesCounts).reduce((a, b) => a + b, 0);
+  // Fall back to counts if no agent data yet
+  if (!html) {
+    for (const sp of currentSpecies) {
+      const emoji = ARCHETYPE_EMOJI[sp.archetype] || '❓';
+      const count = lastSpeciesCounts[sp.name] || 0;
+      total += count;
+      html += emoji.repeat(count);
+    }
+  }
   populationEl.innerHTML =
     `<span class="pop-label">population ${total}</span>` +
-    (emojis || '<span class="pop-empty">spawning...</span>');
+    (html || '<span class="pop-empty">spawning...</span>');
 }
 
 function renderLegend(species) {

@@ -79,7 +79,9 @@ class Ecosystem:
         # Spawn at most max_per_tick agents total per tick for staggered entry
         max_per_tick = 2
         spawned = 0
-        for species in self.biome.species:
+        species_list = list(self.biome.species)
+        random.shuffle(species_list)
+        for species in species_list:
             if spawned >= max_per_tick:
                 break
             target = self.state.get_population_target(species)
@@ -129,12 +131,14 @@ class Ecosystem:
 
     def get_status(self) -> dict:
         """Snapshot of current ecosystem state for the web UI."""
-        # Count agents per species
         species_counts: dict[str, int] = {}
+        # Per-agent amplitudes grouped by species (for sized emoji display)
+        species_agents: dict[str, list[float]] = {}
         for agent in self.agents:
-            if agent.alive:
+            if agent.alive and agent.has_voiced:
                 name = agent.species.name
                 species_counts[name] = species_counts.get(name, 0) + 1
+                species_agents.setdefault(name, []).append(round(agent.amp, 4))
 
         return {
             "agents_alive": self.alive_count(),
@@ -142,6 +146,7 @@ class Ecosystem:
             "activity": round(self.state.activity, 3),
             "spawning": self._spawning,
             "species_counts": species_counts,
+            "species_agents": species_agents,
             "nodes": self.sc.node_count_estimate(),
         }
 

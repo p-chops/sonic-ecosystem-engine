@@ -50,6 +50,7 @@ class Agent:
         self.species = species
         self.sc = sc
         self.alive = True
+        self.has_voiced = False  # True after first vocalization
         self.age = 0
         self.max_age = rng.randint(*species.age_range)
         self.rng = rng
@@ -144,6 +145,7 @@ class Agent:
 
     def contribute_activity(self, amount: float = 1.0):
         """Add to the shared activity metric, weighted by depth."""
+        self.has_voiced = True
         self.ecosystem_state.activity += amount * self.activity_weight
 
     def die(self):
