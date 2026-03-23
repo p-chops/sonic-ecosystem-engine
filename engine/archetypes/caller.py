@@ -1,7 +1,9 @@
 """Caller — sings structured phrases with rest periods.
 
-Generates a fixed "song" at birth (a note sequence), repeats it with
-occasional transposition. Rest duration is subject to flocking dynamics.
+All agents of a species share the same song (melody + timing), derived at
+species generation time. Each agent maps the shared template to its own
+pitch set and amplitude. Repeats with occasional transposition. Rest
+duration is subject to flocking dynamics.
 """
 
 from __future__ import annotations
@@ -23,25 +25,25 @@ class CallerBehavior(Behavior):
         rng = agent.rng
 
         # Parameters with defaults
-        song_length = self.params.get("song_length", rng.randint(3, 8))
-        note_dur_range = self.params.get("note_dur_range", (0.1, 0.6))
-        note_gap = self.params.get("note_gap", (0.02, 0.15))
         self.base_pause = self.params.get("base_pause", (1.0, 5.0))
         self.glide_prob = self.params.get("glide_prob", 0.2)
         self.transpose_prob = self.params.get("transpose_prob", 0.15)
 
-        # Depth reduces song complexity
+        # Build song from species template — shared melody, per-agent amplitude
+        song_template = self.params.get("song_template", [])
+        pitches = agent.pitches
+
+        # Depth reduces song complexity — deep agents sing a truncated version
+        song_length = self.params.get("song_length", len(song_template))
         effective_length = max(2, int(song_length * lerp(1.0, 0.4, agent.depth)))
 
-        # Generate the song
-        pitches = agent.pitches
         self.song = []
-        for _ in range(effective_length):
+        for note in song_template[:effective_length]:
             self.song.append({
-                "freq": rng.choice(pitches),
-                "amp": agent.amp * rng.uniform(0.7, 1.0),
-                "decay": rng.uniform(*note_dur_range),
-                "gap": rng.uniform(*note_gap),
+                "freq": pitches[note["pitch_index"] % len(pitches)],
+                "amp": agent.amp * note["amp_scale"],
+                "decay": note["decay"],
+                "gap": note["gap"],
             })
 
     async def run(self):

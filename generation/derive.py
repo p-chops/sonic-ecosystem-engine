@@ -241,22 +241,35 @@ def _derive_effects(dna: MacroDNA, rng: random.Random, archetype: str,
 
 def _derive_caller_params(dna: MacroDNA, rng: random.Random, size: float = 0.5) -> dict:
     """Derive caller behavior params. size: 0=small/high/fast, 1=large/low/slow."""
+    song_length = rng.randint(
+        int(lerp(8, 4, size)),
+        int(lerp(16, 10, size)),
+    )
+    note_dur_range = (
+        lerp(0.02, 0.08, size),
+        lerp(0.08, 0.5, size),
+    )
+    note_gap = (
+        lerp(0.005, 0.02, size),
+        lerp(0.02, 0.12, size),
+    )
+
+    # Generate a species-wide song template: pitch indices + timing.
+    # All agents of this species sing the same melody; each applies its own amp.
+    song_template = []
+    for _ in range(song_length):
+        song_template.append({
+            "pitch_index": rng.randint(0, 9999),  # mapped to agent's pitch set via modulo
+            "amp_scale": rng.uniform(0.7, 1.0),
+            "decay": rng.uniform(*note_dur_range),
+            "gap": rng.uniform(*note_gap),
+        })
+
     return {
-        # Small callers: more notes, chattery. Large callers: fewer notes, deliberate.
-        "song_length": rng.randint(
-            int(lerp(8, 4, size)),
-            int(lerp(16, 10, size)),
-        ),
-        # Small: short notes. Large: long sustained notes.
-        "note_dur_range": (
-            lerp(0.02, 0.08, size),
-            lerp(0.08, 0.5, size),
-        ),
-        # Small: tight gaps. Large: wide gaps.
-        "note_gap": (
-            lerp(0.005, 0.02, size),
-            lerp(0.02, 0.12, size),
-        ),
+        "song_length": song_length,
+        "note_dur_range": note_dur_range,
+        "note_gap": note_gap,
+        "song_template": song_template,
         # Small: short rests. Large: long rests.
         "base_pause": (
             lerp(0.3, 1.2, size),
