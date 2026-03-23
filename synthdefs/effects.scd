@@ -79,17 +79,19 @@ SynthDef(\fx_chorus, { |in=0, out=0, rate=0.3, depth=0.003, voices=3|
 }).store;
 
 // --- fx_pan_out ---
-// Panner + output to main bus, with optional send to medium bus.
+// Panner + output to main bus, with send to medium bus.
+// send crossfades between dry (main out) and wet (medium bus):
+//   send=0 → 100% dry, 0% to medium
+//   send=1 → 0% dry, 100% to medium
 // pan: -1 (left) to 1 (right)
-// send: amount sent to medium bus (0=none, 1=full)
 // send_bus: bus index for the shared medium
 // main_out: main output bus (default 0 = hardware out)
 SynthDef(\fx_pan_out, { |in=0, main_out=0, pan=0, amp=1,
 	send=0.3, send_bus=0|
 	var sig = In.ar(in, 1) * amp;
 	var panned = Pan2.ar(sig, pan);
-	Out.ar(main_out, panned);
-	Out.ar(send_bus, sig * send);  // mono send to medium
+	Out.ar(main_out, panned * (1 - send));  // dry: reduced by send amount
+	Out.ar(send_bus, sig * send);            // wet: mono send to medium
 }).store;
 
 )
