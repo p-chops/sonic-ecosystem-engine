@@ -38,7 +38,7 @@ ARCHETYPE_POP_RANGES = {
     "caller":    (3, 8),
     "clicker":   (4, 10),
     "drone":     (2, 4),
-    "swarm":     (3, 8),
+    "swarm":     (1, 3),
     "responder": (1, 3),
 }
 
