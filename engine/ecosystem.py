@@ -114,19 +114,20 @@ class Ecosystem:
         return sum(1 for a in self.agents if a.alive)
 
     def current_energy(self) -> float:
-        """Compute actual energy from live agents using their real amps and depths."""
-        # Duty cycles — same as estimation but applied to real agents
+        """Compute actual energy from live agents, modeling dry/wet signal path."""
         duty = {
             "caller": 0.30, "clicker": 0.15, "drone": 1.00,
             "swarm": 0.40, "responder": 0.10,
         }
+        med = self.biome.medium
+        reverb_return = med.reverb_mix * min(med.reverb_time / 10.0, 1.0)
         total = 0.0
         for agent in self.agents:
             if agent.alive:
                 d = duty.get(agent.species.archetype, 0.3)
-                total += agent.amp * d
-        # Reverb accumulation
-        total *= 1.0 + self.biome.medium.reverb_mix * 0.5
+                send = agent.send
+                effective_amp = agent.amp * ((1 - send) + send * reverb_return)
+                total += effective_amp * d
         return total
 
     def get_status(self) -> dict:

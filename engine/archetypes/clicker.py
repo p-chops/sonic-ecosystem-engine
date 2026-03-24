@@ -28,7 +28,7 @@ class ClickerBehavior(Behavior):
 
     async def run(self):
         rng = self.agent.rng
-        pitches = self.agent.pitches
+        pitches = rng.choices(self.agent.pitches, k=2)
 
         while self.agent.alive:
             # Occasionally rest (skip a cycle)

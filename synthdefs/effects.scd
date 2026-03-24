@@ -90,8 +90,8 @@ SynthDef(\fx_pan_out, { |in=0, main_out=0, pan=0, amp=1,
 	send=0.3, send_bus=0|
 	var sig = In.ar(in, 1) * amp;
 	var panned = Pan2.ar(sig, pan);
-	Out.ar(main_out, panned * (1 - send));  // dry: reduced by send amount
-	Out.ar(send_bus, sig * send);            // wet: mono send to medium
+	Out.ar(main_out, panned * (1 - send));
+	Out.ar(send_bus, sig * send);
 }).store;
 
 )

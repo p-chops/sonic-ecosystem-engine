@@ -631,6 +631,16 @@ _EXPECTED_DEPTH = {
     "close": 1 / 3,      # E[U^2] = 1/3
 }
 
+# Expected send by archetype (mirrors agent.py send derivation at expected depth)
+# send = lerp(0.1, 0.8, depth) for non-drones, lerp(0.5, 0.9, depth) for drones
+_EXPECTED_SEND = {
+    "caller":    0.1 + 0.7 * (2 / 3),    # ~0.57
+    "clicker":   0.1 + 0.7 * (2 / 3),    # ~0.57
+    "drone":     0.5 + 0.4 * 0.5,         # ~0.70
+    "swarm":     0.1 + 0.7 * (2 / 3),    # ~0.57
+    "responder": 0.1 + 0.7 * (1 / 3),    # ~0.33
+}
+
 # Approximate duty cycle by archetype (fraction of time producing sound)
 _DUTY_CYCLE = {
     "caller":    0.30,
@@ -655,9 +665,16 @@ _SOURCE_GAIN_EST = {
 def estimate_biome_energy(biome: BiomeSpec) -> float:
     """Estimate the expected total amplitude energy of a biome at steady state.
 
-    Used by the EcosystemManager to set per-biome limiter makeup gain so that
-    output loudness is consistent across biomes with very different densities.
+    Models the actual signal path: each agent's output splits into dry (1-send)
+    going direct to main out, and wet (send) going to the medium bus. The reverb
+    return depends on room size and decay — a tiny dry room returns almost nothing,
+    a cathedral returns a lot. The AGC uses this to boost quiet biomes.
     """
+    med = biome.medium
+    # How much energy the reverb returns: long decay + wet mix = high return,
+    # short decay + dry mix = energy sent to reverb mostly vanishes
+    reverb_return = med.reverb_mix * min(med.reverb_time / 10.0, 1.0)
+
     total = 0.0
     for sp in biome.species:
         expected_depth = _EXPECTED_DEPTH.get(sp.depth_dist, 0.5)
@@ -666,18 +683,20 @@ def estimate_biome_energy(biome: BiomeSpec) -> float:
         amp = base_amp * source_gain
 
         if sp.archetype == "drone":
-            amp *= 0.4
+            amp *= 0.7
 
         size = sp.params.get("size")
         if size is not None:
             amp *= lerp(0.6, 1.0, size)
 
         duty = _DUTY_CYCLE.get(sp.archetype, 0.3)
-        total += amp * sp.population * duty
+        send = _EXPECTED_SEND.get(sp.archetype, 0.5)
 
-    # Reverb accumulates energy in the tail — wetter biomes are louder
-    reverb_factor = 1.0 + biome.medium.reverb_mix * 0.5
-    total *= reverb_factor
+        # Dry path: amp * (1 - send) goes directly to output
+        # Wet path: amp * send goes to reverb, partially returns
+        effective_amp = amp * ((1 - send) + send * reverb_return)
+
+        total += effective_amp * sp.population * duty
 
     return total
 
