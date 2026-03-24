@@ -176,11 +176,11 @@ class EcosystemManager:
 
     # Energy estimation reference — a "typical" biome's estimated energy.
     # Biomes below this get boosted, above get attenuated.
-    _REFERENCE_ENERGY = 1.0
-    # Makeup gain range (dB). Default is 6dB; estimation shifts within this range.
+    _REFERENCE_ENERGY = 0.6
+    # Makeup gain range (dB). Default is 8dB; estimation shifts within this range.
     _MAKEUP_MIN = 0.0
-    _MAKEUP_MAX = 18.0
-    _MAKEUP_DEFAULT = 6.0
+    _MAKEUP_MAX = 24.0
+    _MAKEUP_DEFAULT = 8.0
     # AGC smoothing — how fast the AGC corrects (0=frozen, 1=instant)
     _AGC_SMOOTHING = 0.25
     _AGC_INTERVAL = 3.0  # seconds between AGC adjustments
