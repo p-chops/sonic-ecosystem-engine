@@ -153,10 +153,18 @@ class Agent:
         # Drone fade-out is handled async before teardown — see graceful_die()
         self.voice.teardown()
 
-    async def graceful_die(self):
-        """Async death — gives behaviors a chance to fade out before teardown."""
+    async def graceful_die(self, fade_time: float = 2.0):
+        """Async death — fades out the voice chain output before teardown."""
         self.alive = False
         from engine.archetypes.drone import DroneBehavior
         if isinstance(self.behavior, DroneBehavior):
             await self.behavior.fade_out()
+        else:
+            # Fade out the output node for non-drone agents
+            steps = 10
+            step_dur = fade_time / steps
+            for i in range(1, steps + 1):
+                amp = self.amp * (1 - i / steps)
+                self.voice.set_amp(amp)
+                await asyncio.sleep(step_dur)
         self.voice.teardown()
