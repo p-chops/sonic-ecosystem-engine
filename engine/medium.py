@@ -14,7 +14,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from engine.bridge import ADD_TO_TAIL
+from engine.bridge import ADD_TO_HEAD, ADD_TO_TAIL
 
 if TYPE_CHECKING:
     from engine.bridge import SCBridge
@@ -98,10 +98,11 @@ class Medium:
         self.nodes.append(node)
         self._reverb_node = node
 
-        # 4. Noise floor (independent — writes directly to main out)
+        # 4. Noise floor — feeds into the medium bus so it picks up
+        #    resonance, EQ, and reverb like everything else
         node = sc.synth("med_noise_floor", target_group=self.group,
-                        add_action=ADD_TO_TAIL,
-                        out=0,
+                        add_action=ADD_TO_HEAD,  # before resonance reads the bus
+                        out=self.bus,
                         level=noise_level,
                         color=spec.noise_floor_color)
         self.nodes.append(node)

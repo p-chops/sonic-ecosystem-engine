@@ -75,6 +75,7 @@ SynthDef(\med_eq, { |in=0, out=0,
 
 // --- med_noise_floor ---
 // Ambient noise texture of the space itself.
+// Feeds into the medium bus (mono) so it picks up resonance + reverb.
 // level: amplitude in dB (e.g. -40)
 // color: 0=white, 1=brown (interpolates via LPF cutoff)
 // filter: additional LPF cutoff on the noise
@@ -86,7 +87,7 @@ SynthDef(\med_noise_floor, { |out=0, level=(-40), color=0.5, filter=8000|
 	// Color: crossfade between white and brown (heavily filtered) noise
 	colored = LPF.ar(colored, filter.clip(20, 20000));
 	sig = colored * level.dbamp;
-	Out.ar(out, Pan2.ar(sig));
+	Out.ar(out, sig);  // mono — reverb decorrelates to stereo
 }).store;
 
 // --- med_limiter ---
