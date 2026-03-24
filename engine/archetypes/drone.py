@@ -49,6 +49,13 @@ class DroneBehavior(Behavior):
         self.filter_lo = self.params.get("filter_lo", 500)
         self.filter_hi = self.params.get("filter_hi", 4000)
 
+        # Amplitude breathing
+        self.amp_breath_rate = self.params.get("amp_breath_rate", 0.04)
+        self.amp_breath_depth = self.params.get("amp_breath_depth", 0.25)
+
+        # Modulation tick rate (how often LFOs update)
+        self.mod_rate = self.params.get("mod_rate", 0.5)
+
         # Pick a base frequency
         self.base_freq = rng.choice(agent.pitches)
         self.current_freq = self.base_freq
@@ -59,6 +66,7 @@ class DroneBehavior(Behavior):
         self.pan_phase = rng.uniform(0, 2 * math.pi)
         self.send_phase = rng.uniform(0, 2 * math.pi)
         self.filter_phase = rng.uniform(0, 2 * math.pi)
+        self.amp_phase = rng.uniform(0, 2 * math.pi)
 
         self.drone_node = None
         self._elapsed = 0.0
@@ -76,42 +84,53 @@ class DroneBehavior(Behavior):
 
         await self._fade_in()
 
+        # Frequency drift happens on a slow clock
+        next_drift = rng.uniform(*self.drift_rate)
+
         while self.agent.alive and self.agent.age < self.agent.max_age - 2:
-            drift_interval = rng.uniform(*self.drift_rate)
-            await self.wait(drift_interval)
-            self._elapsed += drift_interval
+            await self.wait(self.mod_rate)
+            self._elapsed += self.mod_rate
 
             if not self.agent.alive:
                 break
 
-            # Frequency drift
-            drift = 1.0 + rng.uniform(-self.drift_range, self.drift_range)
-            self.current_freq = self.base_freq * drift
-            if not self.agent.voice._torn_down:
-                self.agent.sc.set(self.drone_node, freq=self.current_freq)
+            # Frequency drift (slow — only changes every drift_rate seconds)
+            next_drift -= self.mod_rate
+            if next_drift <= 0:
+                drift = 1.0 + rng.uniform(-self.drift_range, self.drift_range)
+                self.current_freq = self.base_freq * drift
+                if not self.agent.voice._torn_down:
+                    self.agent.sc.set(self.drone_node, freq=self.current_freq)
+                next_drift = rng.uniform(*self.drift_rate)
+
+            t = self._elapsed * 2 * math.pi  # common time base
 
             # Pan wander (sinusoidal)
-            pan_lfo = math.sin(self._elapsed * self.pan_drift_rate * 2 * math.pi + self.pan_phase)
+            pan_lfo = math.sin(t * self.pan_drift_rate + self.pan_phase)
             new_pan = max(-1, min(1, self.pan_center + pan_lfo * self.pan_drift_range))
             self.agent.voice.set_pan(new_pan)
 
             # Send wander (breathe in/out of reverb)
-            send_lfo = math.sin(self._elapsed * self.send_drift_rate * 2 * math.pi + self.send_phase)
+            send_lfo = math.sin(t * self.send_drift_rate + self.send_phase)
             new_send = lerp(self.send_lo, self.send_hi, (send_lfo + 1) / 2)
             self.agent.voice.set_send(new_send)
 
-            # Filter sweep (modulate the depth LPF)
-            filter_lfo = math.sin(self._elapsed * self.filter_drift_rate * 2 * math.pi + self.filter_phase)
+            # Filter sweep (modulate the first effect — typically LPF from depth darkening)
+            filter_lfo = math.sin(t * self.filter_drift_rate + self.filter_phase)
             new_cutoff = lerp(self.filter_lo, self.filter_hi, (filter_lfo + 1) / 2)
             self.agent.voice.set_effect_param(0, cutoff=new_cutoff)
+
+            # Amplitude breathing — slow swell and recede
+            amp_lfo = math.sin(t * self.amp_breath_rate + self.amp_phase)
+            breath = 1.0 - self.amp_breath_depth * ((amp_lfo + 1) / 2)
 
             # Inverse coupling: duck amplitude when activity is high
             if self.inverse_coupling:
                 activity = self.agent.ecosystem_state.activity
                 duck = lerp(1.0, 0.2, min(activity / 5.0, 1.0))
-                self.current_amp = self.target_amp * duck
+                self.current_amp = self.target_amp * duck * breath
             else:
-                self.current_amp = self.target_amp
+                self.current_amp = self.target_amp * breath
 
             if not self.agent.voice._torn_down:
                 self.agent.sc.set(self.drone_node, amp=self.current_amp)

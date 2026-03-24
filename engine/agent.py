@@ -81,7 +81,7 @@ class Agent:
 
         self.send = lerp(0.1, 0.8, self.depth)
         if species.archetype == "drone":
-            self.send = lerp(0.5, 0.9, self.depth)  # drones live in the reverb
+            self.send = lerp(0.65, 0.95, self.depth)  # drones live deep in the reverb
         self.activity_weight = lerp(1.0, 0.0, self.depth)
 
         # Build voice chain with depth-adjusted params

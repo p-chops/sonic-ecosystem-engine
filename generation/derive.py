@@ -227,10 +227,18 @@ def _derive_effects(dna: MacroDNA, rng: random.Random, archetype: str,
     # Sine sources must have at least one modulation effect to avoid dullness
     if source == "src_sine" and not any(name in ("fx_chorus", "fx_delay", "fx_ring", "fx_fold")
                                         for name, _ in effects):
-        # Guarantee chorus — natural thickening for sine
         effects.append(("fx_chorus", {
             "rate": rng.uniform(0.1, 0.8),
             "depth": rng.uniform(0.002, 0.008),
+            "voices": rng.randint(2, 4),
+        }))
+
+    # Drones must have at least one movement effect — static waveforms sound lifeless
+    if archetype == "drone" and not any(name in ("fx_chorus", "fx_delay")
+                                        for name, _ in effects):
+        effects.append(("fx_chorus", {
+            "rate": rng.uniform(0.05, 0.4),   # slower than callers
+            "depth": rng.uniform(0.003, 0.01), # wider detuning
             "voices": rng.randint(2, 4),
         }))
 
@@ -303,17 +311,22 @@ def _derive_drone_params(dna: MacroDNA, rng: random.Random) -> dict:
         ),
         "drift_range": lerp(0.005, 0.03, rng.random()),  # microtonal — barely perceptible
         "inverse_coupling": dna.sociality > 0.3,
+        # Modulation tick — how often LFOs update (seconds)
+        "mod_rate": rng.uniform(0.3, 1.0),
         # Pan wander
         "pan_drift_rate": rng.uniform(0.02, 0.15),  # Hz — very slow LFO
         "pan_drift_range": rng.uniform(0.3, 0.9),    # how wide the pan sweeps
         # Medium send wander — drones breathe in and out of the reverb
         "send_drift_rate": rng.uniform(0.01, 0.08),
-        "send_lo": rng.uniform(0.3, 0.5),
-        "send_hi": rng.uniform(0.7, 1.0),
+        "send_lo": rng.uniform(0.5, 0.7),
+        "send_hi": rng.uniform(0.85, 1.0),
         # Filter sweep — slow spectral movement
         "filter_drift_rate": rng.uniform(0.01, 0.1),
-        "filter_lo": lerp(300, 800, rng.random()),
-        "filter_hi": lerp(2000, 8000, rng.random()),
+        "filter_lo": lerp(200, 600, rng.random()),
+        "filter_hi": lerp(3000, 8000, rng.random()),
+        # Amplitude breathing — slow swell and recede
+        "amp_breath_rate": rng.uniform(0.02, 0.08),  # Hz
+        "amp_breath_depth": rng.uniform(0.15, 0.4),   # 0=flat, 1=full fade
     }
 
 
@@ -636,7 +649,7 @@ _EXPECTED_DEPTH = {
 _EXPECTED_SEND = {
     "caller":    0.1 + 0.7 * (2 / 3),    # ~0.57
     "clicker":   0.1 + 0.7 * (2 / 3),    # ~0.57
-    "drone":     0.5 + 0.4 * 0.5,         # ~0.70
+    "drone":     0.65 + 0.3 * 0.5,         # ~0.80
     "swarm":     0.1 + 0.7 * (2 / 3),    # ~0.57
     "responder": 0.1 + 0.7 * (1 / 3),    # ~0.33
 }
