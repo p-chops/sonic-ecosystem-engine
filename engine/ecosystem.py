@@ -219,20 +219,32 @@ class EcosystemManager:
             self.sc.set(self._limiter_node, makeup=db)
 
     def _ensure_limiter(self):
-        """Create a single persistent limiter on bus 0 if not already running."""
+        """Create a persistent multi-band mastering chain on bus 0."""
         if self._limiter_node is None:
-            # Limiter group goes at the very end of the node tree
             from engine.bridge import ADD_TO_TAIL
             self._limiter_group = self.sc.new_group()
             self._limiter_node = self.sc.synth(
-                "med_limiter",
+                "med_master",
                 target_group=self._limiter_group,
                 add_action=ADD_TO_TAIL,
                 **{"in": 0, "out": 0},
-                threshold=-18,  # low threshold — engage on average levels, not just peaks
-                ratio=8,        # aggressive leveling
-                attack=0.1,     # 100ms — slow enough to not pump on transients
-                release=1.0,    # 1s — smooth ride over agent spawns/deaths
+                drive=12,         # slam into the compressors
+                lo_boost=6,       # bring up the low end hard (drones)
+                hi_boost=3,       # boost highs (insects/birds)
+                lo_thresh=-30,    # engage on everything
+                mid_thresh=-26,
+                hi_thresh=-24,
+                lo_ratio=12,      # heavy squash per band
+                mid_ratio=10,
+                hi_ratio=8,
+                lo_attack=0.05,   # slow enough for bass transients
+                mid_attack=0.02,
+                hi_attack=0.01,   # fast catch on harsh highs
+                lo_release=0.6,
+                mid_release=0.4,
+                hi_release=0.3,
+                xover_lo=200,
+                xover_hi=3000,
                 makeup=self._current_makeup,
             )
 

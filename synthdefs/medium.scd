@@ -91,14 +91,10 @@ SynthDef(\med_noise_floor, { |out=0, level=(-40), color=0.5, filter=8000|
 }).store;
 
 // --- med_limiter ---
-// Normalizing compressor/limiter.
-// threshold: level in dB above which compression kicks in
-// ratio: compression ratio (1=none, higher=more limiting)
-// makeup: post-compression gain in dB (brings quiet biomes up)
+// Kept for compatibility — simple single-band compressor/limiter.
 SynthDef(\med_limiter, { |in=0, out=0, threshold=(-18), ratio=8, makeup=6,
 	attack=0.1, release=1.0|
-	var sig = In.ar(in, 2);  // stereo at this point
-	// Compander as a slow leveler — long attack/release smooths biome energy
+	var sig = In.ar(in, 2);
 	sig = Compander.ar(sig, sig,
 		thresh: threshold.dbamp,
 		slopeBelow: 1,
@@ -106,10 +102,80 @@ SynthDef(\med_limiter, { |in=0, out=0, threshold=(-18), ratio=8, makeup=6,
 		clampTime: attack.clip(0.001, 1),
 		relaxTime: release.clip(0.01, 10)
 	);
-	// Makeup gain
 	sig = sig * makeup.dbamp;
-	// Hard limiter safety net
 	sig = Limiter.ar(sig, 0.95, 0.01);
+	Out.ar(out, sig);
+}).store;
+
+// --- med_master ---
+// Multi-band mastering chain. Replaces med_limiter for streaming use.
+// Splits into 3 bands (low/mid/high), compresses each independently,
+// recombines with makeup gain, then brick-wall limits.
+//
+// makeup: broadband post-compression gain in dB
+// lo_boost / hi_boost: per-band trim in dB (pre-compression)
+// drive: input gain in dB (push into the compressors harder)
+SynthDef(\med_master, { |in=0, out=0,
+	makeup=18, drive=12,
+	lo_boost=6, hi_boost=3,
+	lo_thresh=(-30), mid_thresh=(-26), hi_thresh=(-24),
+	lo_ratio=12, mid_ratio=10, hi_ratio=8,
+	lo_attack=0.05, mid_attack=0.02, hi_attack=0.01,
+	lo_release=0.6, mid_release=0.4, hi_release=0.3,
+	xover_lo=200, xover_hi=3000|
+
+	var sig = In.ar(in, 2);
+	var lo, mid, hi;
+
+	// Input drive — push signal into the compressors
+	sig = sig * drive.dbamp;
+
+	// --- Band split (Linkwitz-Riley style: cascaded LPF/HPF) ---
+	lo = LPF.ar(LPF.ar(sig, xover_lo), xover_lo);
+	hi = HPF.ar(HPF.ar(sig, xover_hi), xover_hi);
+	mid = sig - lo - hi;  // residual = mid band
+
+	// Per-band trim
+	lo = lo * lo_boost.dbamp;
+	hi = hi * hi_boost.dbamp;
+
+	// --- Per-band compression ---
+	// Low: slow attack lets transients through, long release for smooth bass
+	lo = Compander.ar(lo, lo,
+		thresh: lo_thresh.dbamp,
+		slopeBelow: 1,
+		slopeAbove: (1 / lo_ratio.max(1)),
+		clampTime: lo_attack.clip(0.001, 1),
+		relaxTime: lo_release.clip(0.01, 10)
+	);
+
+	// Mid: moderate — this is where most musical content lives
+	mid = Compander.ar(mid, mid,
+		thresh: mid_thresh.dbamp,
+		slopeBelow: 1,
+		slopeAbove: (1 / mid_ratio.max(1)),
+		clampTime: mid_attack.clip(0.001, 1),
+		relaxTime: mid_release.clip(0.01, 10)
+	);
+
+	// High: fast attack to catch harsh transients, short release
+	hi = Compander.ar(hi, hi,
+		thresh: hi_thresh.dbamp,
+		slopeBelow: 1,
+		slopeAbove: (1 / hi_ratio.max(1)),
+		clampTime: hi_attack.clip(0.001, 1),
+		relaxTime: hi_release.clip(0.01, 10)
+	);
+
+	// --- Recombine ---
+	sig = lo + mid + hi;
+
+	// Broadband makeup gain
+	sig = sig * makeup.dbamp;
+
+	// Brick-wall limiter — nothing gets past 0.95
+	sig = Limiter.ar(sig, 0.95, 0.01);
+
 	Out.ar(out, sig);
 }).store;
 
