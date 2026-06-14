@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luxurine Control Panel</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Rajdhani:wght@300;400;500;600&family=Share+Tech+Mono&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --hull: #0a1520;
+    --hull-light: #0f1f2e;
+    --hull-lighter: #142838;
+    --brass: #c8a050;
+    --brass-light: #e0c070;
+    --brass-dim: #8a6a30;
+    --brass-dark: #5a4420;
+    --teal: #30d0c0;
+    --teal-dim: #1a8a80;
+    --teal-dark: #0e5a55;
+    --amber: #e0a020;
+    --amber-dim: #a07010;
+    --red-warn: #d04040;
+    --green: #40c060;
+    --green-dim: #208040;
+    --glass: rgba(20, 50, 60, 0.5);
+    --glass-border: rgba(48, 208, 192, 0.15);
+    --rivet: #2a3a48;
+  }
+
+  body {
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--hull);
+    color: var(--teal);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* === HULL TEXTURE === */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 120px, rgba(0,0,0,0.15) 120px, rgba(0,0,0,0.15) 121px),
+      repeating-linear-gradient(90deg, transparent, transparent 200px, rgba(0,0,0,0.1) 200px, rgba(0,0,0,0.1) 201px),
+      radial-gradient(ellipse at 50% 0%, rgba(48, 208, 192, 0.03) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* === MAIN LAYOUT === */
+  /* Four columns spread the panels horizontally so the whole UI fits a
+     laptop viewport without scrolling. */
+  .panel-frame {
+    position: relative;
+    z-index: 1;
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 0.7rem 0.9rem;
+    display: grid;
+    grid-template-columns: 210px minmax(240px, 1fr) 230px 230px;
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "header  header   header   header"
+      "nav     scope    environ  master"
+      "nav     pop      environ  master";
+    gap: 0.6rem;
+    height: 100vh;
+  }
+  @media (max-width: 1000px) {
+    .panel-frame {
+      height: auto;
+      grid-template-columns: 1fr 1fr;
+      grid-template-areas:
+        "header  header"
+        "nav     scope"
+        "pop     environ"
+        "master  master";
+    }
+  }
+  @media (max-width: 640px) {
+    .panel-frame {
+      grid-template-columns: 1fr;
+      grid-template-areas: "header" "nav" "scope" "pop" "environ" "master";
+    }
+  }
+
+  /* === INSTRUMENT PANEL (card) === */
+  .instrument {
+    background: linear-gradient(180deg, var(--hull-light), var(--hull));
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    padding: 0.6rem 0.7rem;
+    position: relative;
+    box-shadow:
+      inset 0 1px 0 rgba(48, 208, 192, 0.06),
+      0 2px 12px rgba(0, 0, 0, 0.4);
+  }
+  /* Rivet dots on corners */
+  .instrument::before, .instrument::after {
+    content: '';
+    position: absolute;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #3a4a58, #1a2a38);
+    border: 1px solid #2a3a48;
+  }
+  .instrument::before { top: 8px; left: 8px; }
+  .instrument::after { top: 8px; right: 8px; }
+  .rivet-bl, .rivet-br {
+    position: absolute;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #3a4a58, #1a2a38);
+    border: 1px solid #2a3a48;
+  }
+  .rivet-bl { bottom: 8px; left: 8px; }
+  .rivet-br { bottom: 8px; right: 8px; }
+
+  /* Panel label — brass plaque */
+  .plaque {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.55rem;
+    font-weight: 600;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--brass);
+    text-shadow: 0 0 8px rgba(200, 160, 80, 0.2);
+    margin-bottom: 0.4rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--brass-dark);
+    text-align: center;
+  }
+
+  /* === HEADER === */
+  .header {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.8rem 1.5rem;
+    background: linear-gradient(180deg, #101e2a, var(--hull));
+    border-bottom: 2px solid var(--brass-dark);
+    border-radius: 6px 6px 0 0;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+  }
+  .header-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    background: linear-gradient(180deg, var(--brass-light), var(--brass), var(--brass-dim));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header-sub {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.55rem;
+    color: var(--teal-dim);
+    letter-spacing: 0.15em;
+  }
+  #conn-status {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+  }
+  #conn-status.connected { color: var(--green); }
+  #conn-status.disconnected { color: var(--red-warn); }
+  #conn-status.connecting { color: var(--amber); }
+  .conn-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-right: 0.4rem;
+    vertical-align: middle;
+  }
+  #conn-status.connected .conn-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  #conn-status.disconnected .conn-dot { background: var(--red-warn); box-shadow: 0 0 6px var(--red-warn); }
+  #conn-status.connecting .conn-dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* === NAVIGATION / HELM === */
+  .helm { grid-area: nav; }
+  .helm-seed {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.5rem;
+    color: var(--teal);
+    text-align: center;
+    text-shadow: 0 0 20px rgba(48, 208, 192, 0.3);
+    margin: 0.25rem 0;
+    letter-spacing: 0.05em;
+  }
+  .helm-seed-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.5rem;
+    color: var(--teal-dim);
+    text-align: center;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+  }
+  .btn {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--teal-dark);
+    border-radius: 4px;
+    background: linear-gradient(180deg, var(--hull-lighter), var(--hull-light));
+    color: var(--teal);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+  .btn:hover {
+    background: linear-gradient(180deg, #1a3848, var(--hull-lighter));
+    border-color: var(--teal-dim);
+    color: var(--teal);
+    box-shadow: 0 0 12px rgba(48, 208, 192, 0.1), inset 0 0 12px rgba(48, 208, 192, 0.03);
+  }
+  .btn:active { background: var(--hull-lighter); }
+  .btn:disabled { opacity: 0.25; cursor: default; }
+  .btn-primary { border-color: var(--teal-dim); color: var(--teal); }
+  .btn-danger {
+    border-color: #5a2020;
+    color: var(--red-warn);
+  }
+  .btn-danger:hover {
+    border-color: #8a3030;
+    box-shadow: 0 0 12px rgba(208, 64, 64, 0.1);
+  }
+
+  .seed-input-row {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+  }
+  .seed-input {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--teal-dark);
+    border-radius: 4px;
+    background: var(--hull);
+    color: var(--teal);
+    flex: 1;
+    text-align: center;
+    letter-spacing: 0.1em;
+  }
+  .seed-input::placeholder { color: var(--teal-dark); }
+  .seed-input:focus { outline: none; border-color: var(--teal-dim); box-shadow: 0 0 8px rgba(48, 208, 192, 0.1); }
+
+  /* History / nav log */
+  .nav-log {
+    margin-top: 0.6rem;
+    border-top: 1px solid var(--glass-border);
+    padding-top: 0.4rem;
+  }
+  .nav-log-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.45rem;
+    color: var(--brass-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+  }
+  .nav-entry {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--teal-dark);
+    padding: 0.15rem 0;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .nav-entry:hover { color: var(--teal); }
+
+  /* === SONAR SCOPE (population) === */
+  .scope { grid-area: scope; }
+  .scope-display {
+    background: radial-gradient(circle at center, #0a2028, #050e14);
+    border: 2px solid var(--teal-dark);
+    border-radius: 50%;
+    aspect-ratio: 1;
+    max-width: 240px;
+    width: 100%;
+    margin: 0 auto;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      inset 0 0 60px rgba(48, 208, 192, 0.04),
+      0 0 20px rgba(0, 0, 0, 0.3);
+  }
+  .blip {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    line-height: 1;
+  }
+  /* Sweep animation */
+  .scope-display::before {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 50%; height: 2px;
+    transform-origin: left center;
+    background: linear-gradient(90deg, rgba(48, 208, 192, 0.3), transparent);
+    animation: sweep 4s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  /* Ring guides */
+  .scope-display::after {
+    content: '';
+    position: absolute;
+    inset: 20%;
+    border: 1px solid rgba(48, 208, 192, 0.06);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .scope-ring-outer {
+    position: absolute;
+    inset: 5%;
+    border: 1px solid rgba(48, 208, 192, 0.04);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .scope-crosshair-h, .scope-crosshair-v {
+    position: absolute;
+    background: rgba(48, 208, 192, 0.04);
+    pointer-events: none;
+  }
+  .scope-crosshair-h { width: 100%; height: 1px; top: 50%; left: 0; }
+  .scope-crosshair-v { height: 100%; width: 1px; left: 50%; top: 0; }
+
+  .scope-empty {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--teal-dark);
+    z-index: 1;
+  }
+  .scope-count {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.5rem;
+    color: var(--teal-dim);
+    text-align: center;
+    margin-top: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  /* Species readout beneath scope */
+  .species-readout {
+    margin-top: 0.8rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.8rem;
+    justify-content: center;
+    font-size: 0.68rem;
+  }
+  .sp-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--teal-dim);
+  }
+  .sp-icon { font-size: 0.85rem; }
+  .sp-src { color: var(--brass-dim); font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; }
+  .sp-fx { color: var(--teal-dark); font-size: 0.58rem; }
+
+  /* === POPULATION CARD (below scope) === */
+  .pop-card { grid-area: pop; }
+
+  /* === ENVIRONMENT GAUGES === */
+  .environ { grid-area: environ; display: flex; flex-direction: column; gap: 0.6rem; min-height: 0; }
+  .master-col { grid-area: master; display: flex; flex-direction: column; gap: 0.6rem; min-height: 0; }
+
+  /* Gauge — vertical bar with label */
+  .gauge {
+    margin-bottom: 0.18rem;
+  }
+  .gauge-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.45rem;
+    color: var(--brass-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+  .gauge-bar-wrap {
+    height: 6px;
+    background: var(--hull);
+    border: 1px solid rgba(48, 208, 192, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+  .gauge-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+  .gauge-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--teal-dim);
+    margin-top: 0.15rem;
+    text-align: right;
+  }
+
+  .gauge-teal .gauge-bar { background: linear-gradient(90deg, var(--teal-dark), var(--teal)); }
+  .gauge-amber .gauge-bar { background: linear-gradient(90deg, var(--amber-dim), var(--amber)); }
+  .gauge-brass .gauge-bar { background: linear-gradient(90deg, var(--brass-dark), var(--brass)); }
+  .gauge-green .gauge-bar { background: linear-gradient(90deg, var(--green-dim), var(--green)); }
+  .gauge-red .gauge-bar { background: linear-gradient(90deg, #802020, var(--red-warn)); }
+
+  /* Readout — single value display */
+  .readout {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.2rem 0;
+    border-bottom: 1px solid rgba(48, 208, 192, 0.05);
+  }
+  .readout-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.45rem;
+    color: var(--brass-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .readout-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--teal);
+  }
+  .readout-unit {
+    font-size: 0.55rem;
+    color: var(--teal-dim);
+    margin-left: 0.2rem;
+  }
+
+  /* Activity meter — horizontal segmented bar */
+  .activity-meter {
+    display: flex;
+    gap: 2px;
+    height: 10px;
+    margin-top: 0.3rem;
+  }
+  .activity-seg {
+    flex: 1;
+    background: var(--hull);
+    border: 1px solid rgba(48, 208, 192, 0.08);
+    border-radius: 1px;
+    transition: background 0.3s;
+  }
+  .activity-seg.lit-green { background: var(--green); box-shadow: 0 0 4px rgba(64, 192, 96, 0.3); }
+  .activity-seg.lit-amber { background: var(--amber); box-shadow: 0 0 4px rgba(224, 160, 32, 0.3); }
+  .activity-seg.lit-red { background: var(--red-warn); box-shadow: 0 0 4px rgba(208, 64, 64, 0.3); }
+
+  /* Pitch info */
+  .pitch-readout {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--teal-dim);
+    text-align: center;
+    margin-top: 0.5rem;
+  }
+
+  /* === SHIP'S LOG === */
+  .log { grid-area: log; }
+  .log-entries {
+    display: flex;
+    gap: 0.6rem;
+    overflow-x: auto;
+    padding-bottom: 0.3rem;
+  }
+  .log-entries::-webkit-scrollbar { height: 3px; }
+  .log-entries::-webkit-scrollbar-track { background: var(--hull); }
+  .log-entries::-webkit-scrollbar-thumb { background: var(--teal-dark); border-radius: 2px; }
+  .log-chip {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--teal-dim);
+    background: var(--hull);
+    border: 1px solid rgba(48, 208, 192, 0.1);
+    border-radius: 3px;
+    padding: 0.3rem 0.7rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .log-chip:hover {
+    color: var(--teal);
+    border-color: var(--teal-dim);
+    box-shadow: 0 0 8px rgba(48, 208, 192, 0.08);
+  }
+
+  /* Transitioning indicator */
+  .transit-badge {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.5rem;
+    color: var(--amber);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-align: center;
+    animation: pulse 1.5s infinite;
+    margin-top: 0.3rem;
+  }
+
+  /* 94% shark proof badge */
+  .shark-badge {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.42rem;
+    color: var(--brass-dark);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-align: center;
+    margin-top: 1.5rem;
+    opacity: 0.5;
+  }
+
+  /* === LIVE CONTROLS === */
+  .ctl { margin-bottom: 0.4rem; }
+  .ctl-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.15rem;
+  }
+  .ctl-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--teal);
+  }
+  input.slider {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px;
+    background: linear-gradient(90deg, var(--teal-dark), var(--teal-dim));
+    border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input.slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, var(--brass-light), var(--brass-dim));
+    border: 1px solid var(--brass-dark);
+    box-shadow: 0 0 6px rgba(200, 160, 80, 0.3);
+    cursor: pointer;
+  }
+  input.slider::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, var(--brass-light), var(--brass-dim));
+    border: 1px solid var(--brass-dark);
+    cursor: pointer;
+  }
+  .pop-btns { display: inline-flex; gap: 0.2rem; margin-left: 0.35rem; }
+  .pbtn {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem; line-height: 1;
+    width: 18px; height: 18px; padding: 0;
+    border: 1px solid var(--teal-dark); border-radius: 3px;
+    background: var(--hull-light); color: var(--teal);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .pbtn:hover {
+    border-color: var(--teal-dim);
+    box-shadow: 0 0 6px rgba(48, 208, 192, 0.15);
+  }
+  .pbtn:active { background: var(--hull-lighter); }
+  body.offline .ctl, body.offline .pop-btns, body.offline .spawn-grid { opacity: 0.3; pointer-events: none; }
+
+  /* Spawn-life buttons */
+  .spawn-grid { display: flex; flex-direction: column; gap: 0.3rem; }
+  .spawn-btn {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-family: 'Orbitron', sans-serif; font-size: 0.6rem;
+    font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase;
+    padding: 0.4rem 0.7rem; border: 1px solid var(--teal-dark);
+    border-radius: 4px; background: linear-gradient(180deg, var(--hull-lighter), var(--hull-light));
+    color: var(--teal); cursor: pointer; transition: all 0.15s;
+  }
+  .spawn-btn:hover { border-color: var(--teal-dim); box-shadow: 0 0 10px rgba(48, 208, 192, 0.1); }
+  .spawn-btn:active { background: var(--hull-lighter); }
+  .spawn-btn .blip-icon { font-size: 0.85rem; width: 1rem; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="panel-frame">
+
+  <!-- HEADER BAR -->
+  <div class="header">
+    <div>
+      <div class="header-title">Luxurine Control Panel</div>
+      <div class="header-sub">Sonic Ecosystem Engine v0.4</div>
+    </div>
+    <div id="conn-status" class="disconnected">
+      <span class="conn-dot"></span>OFFLINE
+    </div>
+  </div>
+
+  <!-- LEFT: HELM / NAVIGATION -->
+  <div class="instrument helm">
+    <span class="rivet-bl"></span><span class="rivet-br"></span>
+    <div class="plaque">Helm</div>
+    <div class="helm-seed-label">Current Heading</div>
+    <div class="helm-seed" id="seed-display">-----</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="next-btn" disabled>New Heading</button>
+      <div class="seed-input-row">
+        <input class="seed-input" id="seed-input" type="number" placeholder="coord">
+        <button class="btn btn-primary" id="goto-btn" disabled style="padding:0.5rem 0.8rem">Set</button>
+      </div>
+      <button class="btn btn-danger" id="panic-btn" disabled>Emergency Blow</button>
+    </div>
+    <div class="nav-log" id="history">
+      <div class="nav-log-title">Navigation Log</div>
+      <div id="history-list"></div>
+    </div>
+    <div class="shark-badge">94% Shark Proof</div>
+  </div>
+
+  <!-- CENTER TOP: SONAR SCOPE -->
+  <div class="instrument scope">
+    <span class="rivet-bl"></span><span class="rivet-br"></span>
+    <div class="plaque">Sonar</div>
+    <div class="scope-display" id="population">
+      <div class="scope-ring-outer"></div>
+      <div class="scope-crosshair-h"></div>
+      <div class="scope-crosshair-v"></div>
+      <span class="scope-empty">SCANNING...</span>
+    </div>
+    <div class="scope-count" id="scope-count"></div>
+    <div id="live-spawning-indicator" class="transit-badge" style="display:none">Transitioning</div>
+    <div id="species-legend" class="species-readout"></div>
+  </div>
+
+  <!-- CENTER BOTTOM: pitch + activity -->
+  <div class="instrument pop-card" id="activity-panel">
+    <span class="rivet-bl"></span><span class="rivet-br"></span>
+    <div class="plaque">Acoustic Activity</div>
+    <div class="gauge-label">Intensity</div>
+    <div class="activity-meter" id="activity-meter">
+      <div class="activity-seg"></div><div class="activity-seg"></div>
+      <div class="activity-seg"></div><div class="activity-seg"></div>
+      <div class="activity-seg"></div><div class="activity-seg"></div>
+      <div class="activity-seg"></div><div class="activity-seg"></div>
+      <div class="activity-seg"></div><div class="activity-seg"></div>
+      <div class="activity-seg"></div><div class="activity-seg"></div>
+      <div class="activity-seg"></div><div class="activity-seg"></div>
+      <div class="activity-seg"></div><div class="activity-seg"></div>
+    </div>
+    <div class="readout" style="margin-top:0.8rem">
+      <span class="readout-label">Inhabitants</span>
+      <span><span class="readout-val" id="live-agents">0</span></span>
+    </div>
+    <div id="pitch-section" class="pitch-readout"></div>
+    <div class="ctl" style="margin-top:0.9rem">
+      <div class="ctl-head"><span class="readout-label">Stir</span><span class="ctl-val" id="v-activity">0.0</span></div>
+      <input class="slider" type="range" min="0" max="50" step="0.5" value="0" oninput="onActivity(this.value)">
+      <button class="btn" style="margin-top:0.5rem;padding:0.45rem" onclick="pokeActivity()">Stir the Depths</button>
+    </div>
+  </div>
+
+  <!-- COL 3: BIOME SIGNATURE + MEDIUM -->
+  <div class="environ">
+
+    <div class="instrument" id="dna-panel" style="display:none">
+      <span class="rivet-bl"></span><span class="rivet-br"></span>
+      <div class="plaque">Biome Signature</div>
+      <div id="dna-section"></div>
+    </div>
+
+    <div class="instrument" id="medium-panel" style="display:none">
+      <span class="rivet-bl"></span><span class="rivet-br"></span>
+      <div class="plaque">Acoustic Medium</div>
+      <div id="medium-section"></div>
+    </div>
+
+  </div>
+
+  <!-- COL 4: LEVELER + SEED LIFE -->
+  <div class="master-col">
+
+    <div class="instrument" id="leveler-panel">
+      <span class="rivet-bl"></span><span class="rivet-br"></span>
+      <div class="plaque">Leveler</div>
+      <div id="leveler-section"></div>
+    </div>
+
+    <div class="instrument" id="spawn-panel">
+      <span class="rivet-bl"></span><span class="rivet-br"></span>
+      <div class="plaque">Seed Life</div>
+      <button class="btn" id="empty-toggle" onclick="toggleEmpty()" style="margin-bottom:0.5rem">Empty Lair</button>
+      <div class="spawn-grid" id="spawn-grid"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+const WS_URL = `ws://${location.hostname || 'localhost'}:8765`;
+
+// Sonar blips — each archetype gets a distinct shape
+const ARCHETYPE_BLIP = {
+  caller:    '\u25C6',  // diamond
+  clicker:   '\u25AA',  // small square
+  drone:     '\u25CF',  // filled circle
+  swarm:     '\u2022',  // bullet
+  responder: '\u25B2',  // triangle
+};
+const ARCHETYPE_COLOR = {
+  caller:    '#40d0c0',
+  clicker:   '#c0c060',
+  drone:     '#6090d0',
+  swarm:     '#d08060',
+  responder: '#a080d0',
+};
+
+let ws;
+let currentSeed = null;
+let currentSpecies = [];
+let lastSpeciesCounts = {};
+let lastSpeciesAgents = {};
+const historyLog = [];
+
+const connEl = document.getElementById('conn-status');
+const seedEl = document.getElementById('seed-display');
+const populationEl = document.getElementById('population');
+const scopeCount = document.getElementById('scope-count');
+const legendEl = document.getElementById('species-legend');
+const liveAgents = document.getElementById('live-agents');
+const liveSpawning = document.getElementById('live-spawning-indicator');
+const pitchSection = document.getElementById('pitch-section');
+const nextBtn = document.getElementById('next-btn');
+const gotoBtn = document.getElementById('goto-btn');
+const panicBtn = document.getElementById('panic-btn');
+const seedInput = document.getElementById('seed-input');
+const historyList = document.getElementById('history-list');
+
+function connect() {
+  connEl.innerHTML = '<span class="conn-dot"></span>LINKING';
+  connEl.className = 'connecting';
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    connEl.innerHTML = '<span class="conn-dot"></span>ONLINE';
+    connEl.className = 'connected';
+    nextBtn.disabled = false;
+    gotoBtn.disabled = false;
+    panicBtn.disabled = false;
+    document.body.classList.remove('offline');
+    ws.send(JSON.stringify({ cmd: 'get_state' }));
+  };
+
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if ((data.event === 'biome_change' || data.event === 'info') && data.seed != null) {
+      updateBiome(data);
+    } else if (data.event === 'status') {
+      updateLiveStatus(data);
+    } else if (data.cmd === 'get_state' && data.result) {
+      const r = data.result;
+      if (r.biome && r.biome.seed != null) updateBiome(r.biome);
+      if (r.medium) applyLiveMedium(r.medium);
+      if (r.leveler) applyLeveler(r.leveler);
+      if (r.empty != null) applyEmpty(r.empty);
+      if (r.status) updateLiveStatus(r.status);
+    }
+  };
+
+  ws.onclose = () => {
+    connEl.innerHTML = '<span class="conn-dot"></span>OFFLINE';
+    connEl.className = 'disconnected';
+    nextBtn.disabled = true;
+    gotoBtn.disabled = true;
+    panicBtn.disabled = true;
+    document.body.classList.add('offline');
+    setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function updateBiome(data) {
+  if (currentSeed != null && currentSeed !== data.seed) {
+    historyLog.unshift({ seed: currentSeed, time: new Date() });
+    renderHistory();
+  }
+  currentSeed = data.seed;
+  currentSpecies = data.species || [];
+  seedEl.textContent = String(data.seed).padStart(5, '0');
+
+  if (data.dna) renderDNA(data.dna);
+  if (data.species) renderLegend(data.species);
+  if (data.medium) renderMedium(data.medium);
+  if (data.pitch_set) renderPitch(data.pitch_set);
+  lastSpeciesCounts = {};
+  lastSpeciesAgents = {};
+  renderPopulation();
+}
+
+function updateLiveStatus(data) {
+  liveAgents.textContent = data.agents_alive;
+  liveSpawning.style.display = data.transitioning ? 'block' : 'none';
+
+  // Activity meter
+  const segs = document.querySelectorAll('.activity-seg');
+  const level = Math.min(data.activity / 10, 1);
+  const lit = Math.round(level * segs.length);
+  segs.forEach((seg, i) => {
+    seg.className = 'activity-seg';
+    if (i < lit) {
+      if (i < segs.length * 0.6) seg.classList.add('lit-green');
+      else if (i < segs.length * 0.85) seg.classList.add('lit-amber');
+      else seg.classList.add('lit-red');
+    }
+  });
+
+  lastSpeciesCounts = data.species_counts || {};
+  lastSpeciesAgents = data.species_agents || {};
+  renderPopulation();
+}
+
+// Simple seeded RNG so blip positions are stable per-agent
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// Place a point uniformly within a circle (radius 0..maxR as fraction of 50%)
+function randomInCircle(rng, maxR) {
+  const r = Math.sqrt(rng()) * maxR;
+  const theta = rng() * 2 * Math.PI;
+  return { x: 50 + r * Math.cos(theta), y: 50 + r * Math.sin(theta) };
+}
+
+function renderPopulation() {
+  const statics = `
+    <div class="scope-ring-outer"></div>
+    <div class="scope-crosshair-h"></div>
+    <div class="scope-crosshair-v"></div>`;
+
+  if (!currentSpecies.length) {
+    populationEl.innerHTML = statics + '<span class="scope-empty" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">SCANNING...</span>';
+    scopeCount.textContent = '';
+    return;
+  }
+
+  let blips = '';
+  let total = 0;
+
+  // Hash a string to a stable integer
+  function hashStr(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    return h;
+  }
+
+  for (const sp of currentSpecies) {
+    const blip = ARCHETYPE_BLIP[sp.archetype] || '\u2022';
+    const color = ARCHETYPE_COLOR[sp.archetype] || '#40d0c0';
+    const amps = lastSpeciesAgents[sp.name] || [];
+    const spHash = hashStr(sp.name);
+    total += amps.length;
+    for (let i = 0; i < amps.length; i++) {
+      // Seed from species name hash + index within species — stable per slot
+      const rng = mulberry32(spHash * 31 + i * 997);
+      const pos = randomInCircle(rng, 42);
+      const t = Math.min(amps[i] / 0.4, 1);
+      const size = 0.6 + t * 1.3;
+      const opacity = 0.4 + t * 0.6;
+      blips += `<span class="blip" style="left:${pos.x.toFixed(1)}%;top:${pos.y.toFixed(1)}%;font-size:${size.toFixed(2)}rem;color:${color};opacity:${opacity.toFixed(2)};text-shadow:0 0 6px ${color}">${blip}</span>`;
+    }
+  }
+
+  // Fallback to counts if no per-agent data yet
+  if (!blips) {
+    for (const sp of currentSpecies) {
+      const blip = ARCHETYPE_BLIP[sp.archetype] || '\u2022';
+      const color = ARCHETYPE_COLOR[sp.archetype] || '#40d0c0';
+      const count = lastSpeciesCounts[sp.name] || 0;
+      const spHash = hashStr(sp.name);
+      total += count;
+      for (let i = 0; i < count; i++) {
+        const rng = mulberry32(spHash * 31 + i * 997);
+        const pos = randomInCircle(rng, 42);
+        blips += `<span class="blip" style="left:${pos.x.toFixed(1)}%;top:${pos.y.toFixed(1)}%;color:${color};text-shadow:0 0 6px ${color}">${blip}</span>`;
+      }
+    }
+  }
+
+  populationEl.innerHTML = statics +
+    (blips || '<span class="scope-empty" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">AWAITING CONTACT</span>');
+  scopeCount.textContent = total ? `${total} contacts` : '';
+}
+
+function renderLegend(species) {
+  legendEl.innerHTML = species.map(sp => {
+    const blip = ARCHETYPE_BLIP[sp.archetype] || '\u2022';
+    const color = ARCHETYPE_COLOR[sp.archetype] || '#40d0c0';
+    const src = sp.source.replace('src_', '');
+    const fx = sp.effects.length ? sp.effects.map(f => f.replace('fx_','')).join('\u00b7') : '';
+    return `<div class="sp-item">
+      <span class="sp-icon" style="color:${color}">${blip}</span>
+      <span>${sp.archetype}</span>
+      <span class="sp-src">${src}</span>
+      ${fx ? `<span class="sp-fx">${fx}</span>` : ''}
+      <span class="pop-btns">
+        <button class="pbtn" title="cull one" onclick="popCmd('cull','${sp.name}')">−</button>
+        <button class="pbtn" title="spawn one" onclick="popCmd('spawn','${sp.name}')">+</button>
+      </span>
+    </div>`;
+  }).join('');
+}
+
+function renderDNA(dna) {
+  document.getElementById('dna-panel').style.display = '';
+  const dims = [
+    { key: 'density', label: 'Density', cls: 'gauge-teal' },
+    { key: 'spectral_center', label: 'Spectral', cls: 'gauge-amber' },
+    { key: 'temporal', label: 'Temporal', cls: 'gauge-brass' },
+    { key: 'sociality', label: 'Sociality', cls: 'gauge-green' },
+    { key: 'room_scale', label: 'Room Scale', cls: 'gauge-teal' },
+  ];
+  document.getElementById('dna-section').innerHTML = dims.map(d => {
+    const v = dna[d.key] || 0;
+    const pct = (v * 100).toFixed(0);
+    return `<div class="gauge ${d.cls}">
+      <div class="gauge-label">${d.label}</div>
+      <div class="gauge-bar-wrap"><div class="gauge-bar" style="width:${pct}%"></div></div>
+      <div class="gauge-val">${pct}%</div>
+    </div>`;
+  }).join('');
+}
+
+// Live medium controls. Two callers normalize the two payload shapes:
+// biome_change/info (flat spec) and get_state (nested live values).
+function renderMediumControls(n) {
+  document.getElementById('medium-panel').style.display = '';
+  document.getElementById('medium-section').innerHTML = `
+    <div class="ctl">
+      <div class="ctl-head"><span class="readout-label">Chamber</span><span class="ctl-val" id="v-roomsize">${n.roomsize.toFixed(1)} m</span></div>
+      <input class="slider" type="range" min="0.1" max="300" step="0.1" value="${n.roomsize}" oninput="onReverb('roomsize',this.value,'v-roomsize',' m',1)">
+    </div>
+    <div class="ctl">
+      <div class="ctl-head"><span class="readout-label">Decay</span><span class="ctl-val" id="v-revtime">${n.revtime.toFixed(1)} s</span></div>
+      <input class="slider" type="range" min="0.1" max="100" step="0.1" value="${n.revtime}" oninput="onReverb('revtime',this.value,'v-revtime',' s',1)">
+    </div>
+    <div class="ctl">
+      <div class="ctl-head"><span class="readout-label">Immersion</span><span class="ctl-val" id="v-send">${n.sendScale.toFixed(2)}×</span></div>
+      <input class="slider" type="range" min="0" max="2" step="0.05" value="${n.sendScale}" oninput="onSend(this.value)">
+    </div>
+    <div class="ctl">
+      <div class="ctl-head"><span class="readout-label">Reverb Mix</span><span class="ctl-val" id="v-revmix">${(n.reverbMix * 100).toFixed(0)}%</span></div>
+      <input class="slider" type="range" min="0" max="1" step="0.01" value="${n.reverbMix}" oninput="onReverbMix(this.value)">
+    </div>
+    <div class="ctl">
+      <div class="ctl-head"><span class="readout-label">Resonance</span><span class="ctl-val" id="v-reson">${(n.resonMix * 100).toFixed(0)}%</span></div>
+      <input class="slider" type="range" min="0" max="1" step="0.01" value="${n.resonMix}" oninput="onReson(this.value)">
+    </div>
+    <div class="ctl">
+      <div class="ctl-head"><span class="readout-label">Noise Floor</span><span class="ctl-val" id="v-noise">${n.noiseLevel.toFixed(0)} dB</span></div>
+      <input class="slider" type="range" min="-96" max="-6" step="1" value="${n.noiseLevel}" oninput="onNoise(this.value)">
+    </div>
+  `;
+}
+
+function renderMedium(med) {
+  renderMediumControls({
+    roomsize: med.reverb_roomsize, revtime: med.reverb_time,
+    reverbMix: med.reverb_mix, resonMix: 0.6, noiseLevel: med.noise_floor_level,
+    sendScale: 1.0,
+  });
+}
+
+function applyLiveMedium(m) {
+  renderMediumControls({
+    roomsize: m.reverb.roomsize, revtime: m.reverb.revtime,
+    reverbMix: m.reverb.mix, resonMix: m.resonance ? m.resonance.mix : 0.6,
+    noiseLevel: m.noise_floor.level,
+    sendScale: m.send_scale != null ? m.send_scale : 1.0,
+  });
+}
+
+function renderPitch(pitch) {
+  pitchSection.textContent = `${pitch.strategy.replace('_',' ')} \u2014 ${pitch.n_notes} tones`;
+}
+
+function renderHistory() {
+  historyList.innerHTML = historyLog.slice(0, 8).map(h =>
+    `<div class="nav-entry" onclick="goToSeed(${h.seed})">
+      ${String(h.seed).padStart(5, '0')} \u00b7 ${timeSince(h.time)}
+    </div>`
+  ).join('');
+}
+
+function timeSince(date) {
+  const s = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m ago`;
+}
+
+function goToSeed(seed) {
+  if (ws && ws.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ cmd: 'next', seed }));
+}
+
+// --- Live control senders -------------------------------------------------
+function wsSend(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+
+// Throttle slider spam: leading send + trailing send of the final value.
+const _throttle = {};
+function sendThrottled(key, obj, ms = 80) {
+  const now = Date.now();
+  const e = _throttle[key] || (_throttle[key] = {});
+  if (!e.last || now - e.last >= ms) {
+    e.last = now; wsSend(obj);
+  } else {
+    clearTimeout(e.t);
+    e.t = setTimeout(() => { e.last = Date.now(); wsSend(obj); }, ms - (now - e.last));
+  }
+}
+
+function onReverb(param, val, vid, unit, dec) {
+  document.getElementById(vid).textContent = Number(val).toFixed(dec) + (unit || '');
+  sendThrottled('rv_' + param, { cmd: 'set_reverb', [param]: Number(val) });
+}
+function onReverbMix(val) {
+  document.getElementById('v-revmix').textContent = (val * 100).toFixed(0) + '%';
+  sendThrottled('rv_mix', { cmd: 'set_reverb', mix: Number(val) });
+}
+function onSend(val) {
+  document.getElementById('v-send').textContent = Number(val).toFixed(2) + '×';
+  sendThrottled('send', { cmd: 'set_medium_send', scale: Number(val) });
+}
+function onReson(val) {
+  document.getElementById('v-reson').textContent = (val * 100).toFixed(0) + '%';
+  sendThrottled('reson', { cmd: 'set_resonance', mix: Number(val) });
+}
+function onNoise(val) {
+  document.getElementById('v-noise').textContent = Number(val).toFixed(0) + ' dB';
+  sendThrottled('noise', { cmd: 'set_noise_floor', level: Number(val) });
+}
+function onActivity(val) {
+  document.getElementById('v-activity').textContent = Number(val).toFixed(1);
+  sendThrottled('act', { cmd: 'set_activity', value: Number(val) });
+}
+function pokeActivity() { wsSend({ cmd: 'bump_activity', amount: 5 }); }
+function popCmd(cmd, name) { wsSend({ cmd, species: name, count: 1 }); }
+function spawnArch(archetype) { wsSend({ cmd: 'spawn_archetype', archetype, count: 1 }); }
+
+let emptyMode = false;
+function updateEmptyBtn() {
+  const b = document.getElementById('empty-toggle');
+  if (!b) return;
+  b.textContent = emptyMode ? '● Redemptions Only' : 'Empty Lair';
+  b.classList.toggle('btn-danger', emptyMode);
+}
+function toggleEmpty() {
+  emptyMode = !emptyMode;
+  updateEmptyBtn();
+  wsSend({ cmd: 'set_empty', on: emptyMode });
+}
+function applyEmpty(v) { emptyMode = !!v; updateEmptyBtn(); }
+
+// --- Master leveler (slow dynamic-range glue) -----------------------------
+const LEVELER_DEFAULTS = { thresh: -24, ratio: 3, attack: 0.15, release: 3.0 };
+
+function renderLeveler(lv) {
+  document.getElementById('leveler-section').innerHTML = `
+    <div class="ctl">
+      <div class="ctl-head"><span class="readout-label">Squash</span><span class="ctl-val" id="v-lev-ratio">${lv.ratio.toFixed(1)}:1</span></div>
+      <input class="slider" type="range" min="1" max="20" step="0.5" value="${lv.ratio}" oninput="onLevRatio(this.value)">
+    </div>
+    <div class="ctl">
+      <div class="ctl-head"><span class="readout-label">Threshold</span><span class="ctl-val" id="v-lev-thresh">${lv.thresh.toFixed(0)} dB</span></div>
+      <input class="slider" type="range" min="-60" max="0" step="1" value="${lv.thresh}" oninput="onLevThresh(this.value)">
+    </div>
+    <div class="ctl">
+      <div class="ctl-head"><span class="readout-label">Attack</span><span class="ctl-val" id="v-lev-attack">${(lv.attack * 1000).toFixed(0)} ms</span></div>
+      <input class="slider" type="range" min="0.001" max="1" step="0.005" value="${lv.attack}" oninput="onLevAttack(this.value)">
+    </div>
+    <div class="ctl">
+      <div class="ctl-head"><span class="readout-label">Release</span><span class="ctl-val" id="v-lev-release">${lv.release.toFixed(1)} s</span></div>
+      <input class="slider" type="range" min="0.01" max="10" step="0.1" value="${lv.release}" oninput="onLevRelease(this.value)">
+    </div>
+  `;
+}
+function applyLeveler(lv) {
+  renderLeveler({
+    thresh: lv.thresh != null ? lv.thresh : LEVELER_DEFAULTS.thresh,
+    ratio: lv.ratio != null ? lv.ratio : LEVELER_DEFAULTS.ratio,
+    attack: lv.attack != null ? lv.attack : LEVELER_DEFAULTS.attack,
+    release: lv.release != null ? lv.release : LEVELER_DEFAULTS.release,
+  });
+}
+function onLevRatio(val) {
+  document.getElementById('v-lev-ratio').textContent = Number(val).toFixed(1) + ':1';
+  sendThrottled('lev_ratio', { cmd: 'set_master_leveler', lev_ratio: Number(val) });
+}
+function onLevThresh(val) {
+  document.getElementById('v-lev-thresh').textContent = Number(val).toFixed(0) + ' dB';
+  sendThrottled('lev_thresh', { cmd: 'set_master_leveler', lev_thresh: Number(val) });
+}
+function onLevAttack(val) {
+  document.getElementById('v-lev-attack').textContent = (val * 1000).toFixed(0) + ' ms';
+  sendThrottled('lev_attack', { cmd: 'set_master_leveler', lev_attack: Number(val) });
+}
+function onLevRelease(val) {
+  document.getElementById('v-lev-release').textContent = Number(val).toFixed(1) + ' s';
+  sendThrottled('lev_release', { cmd: 'set_master_leveler', lev_release: Number(val) });
+}
+
+function renderSpawnButtons() {
+  const order = ['caller', 'clicker', 'drone', 'swarm', 'responder'];
+  document.getElementById('spawn-grid').innerHTML = order.map(a => {
+    const blip = ARCHETYPE_BLIP[a] || '•';
+    const color = ARCHETYPE_COLOR[a] || '#40d0c0';
+    return `<button class="spawn-btn" onclick="spawnArch('${a}')">
+      <span class="blip-icon" style="color:${color}">${blip}</span>${a}
+    </button>`;
+  }).join('');
+}
+
+nextBtn.addEventListener('click', () => {
+  if (ws && ws.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ cmd: 'next' }));
+});
+
+gotoBtn.addEventListener('click', () => {
+  const seed = parseInt(seedInput.value);
+  if (!isNaN(seed)) { goToSeed(seed); seedInput.value = ''; }
+});
+
+panicBtn.addEventListener('click', () => {
+  if (ws && ws.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ cmd: 'panic' }));
+});
+
+seedInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') gotoBtn.click(); });
+
+document.body.classList.add('offline');
+renderSpawnButtons();
+updateEmptyBtn();
+renderLeveler(LEVELER_DEFAULTS);
+setInterval(renderHistory, 30000);
+connect();
+</script>
+</body>
+</html>
