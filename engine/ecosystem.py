@@ -22,17 +22,20 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+ARCHETYPES = ("caller", "clicker", "drone", "swarm", "responder")
+
 
 class EcosystemState:
     """Mutable runtime state. The single source of truth for all live parameters."""
 
-    def __init__(self, biome: BiomeSpec):
+    def __init__(self, biome: BiomeSpec, empty: bool = False):
         self.species_targets: dict[str, int] = {
-            sp.name: sp.population for sp in biome.species
+            sp.name: (0 if empty else sp.population) for sp in biome.species
         }
         self.activity: float = 0.0
         self.activity_decay: float = 0.6
         self.tick_interval: float = 3.0
+        self.send_scale: float = 1.0  # global agent→medium send multiplier
 
     def get_population_target(self, species: Species) -> int:
         return self.species_targets.get(species.name, 0)
@@ -41,10 +44,12 @@ class EcosystemState:
 class Ecosystem:
     """Runs a single biome: population management, activity decay, medium."""
 
-    def __init__(self, biome: BiomeSpec, sc: SCBridge, start_silent: bool = False):
+    def __init__(self, biome: BiomeSpec, sc: SCBridge, start_silent: bool = False,
+                 empty: bool = False):
         self.biome = biome
         self.sc = sc
-        self.state = EcosystemState(biome)
+        self.state = EcosystemState(biome, empty=empty)
+        self._adhoc_idx = 1000  # name counter for on-demand minted species
         # Agent group first, medium group second — execution order matters.
         # Agents write to the medium bus; medium must read after agents.
         self.agents_group = sc.new_group()
@@ -178,6 +183,31 @@ class Ecosystem:
             self._spawn_agent(species)
         return count
 
+    def spawn_archetype(self, archetype: str, count: int = 1) -> dict:
+        """Spawn agent(s) of an archetype, independent of biome population.
+        Reuses an existing species of that archetype if the biome has one;
+        otherwise mints a fresh species from the biome's DNA + pitch set.
+        Returns {archetype, species, spawned}."""
+        if archetype not in ARCHETYPES:
+            raise ValueError(f"unknown archetype: {archetype}")
+        count = max(1, min(16, int(count)))
+
+        species = next((sp for sp in self.biome.species
+                        if sp.archetype == archetype), None)
+        if species is None:
+            from generation.derive import _derive_single_species
+            species = _derive_single_species(
+                archetype, self._adhoc_idx, self.biome.dna,
+                self.biome.pitch_set, random.Random(),
+            )
+            self._adhoc_idx += 1
+            self.biome.species.append(species)
+            self.state.species_targets.setdefault(species.name, 0)
+
+        for _ in range(count):
+            self._spawn_agent(species)
+        return {"archetype": archetype, "species": species.name, "spawned": count}
+
     def cull(self, name: str, count: int = 1) -> int:
         """Kill the oldest N agents of a species immediately.
         Returns how many were culled."""
@@ -203,9 +233,23 @@ class Ecosystem:
         """Add to the shared activity level. Returns the new level."""
         return self.set_activity(self.state.activity + float(amount))
 
+    def set_medium_send(self, scale: float) -> float:
+        """Scale every agent's send into the medium/reverb path. 1.0 = default,
+        >1 wetter, 0 fully dry. Applies live + to future spawns. The dominant
+        control for how audible the reverb/resonance/medium is."""
+        scale = max(0.0, min(2.0, float(scale)))
+        self.state.send_scale = scale
+        for a in self.agents:
+            if a.alive:
+                a.send = min(1.0, a.base_send * scale)
+                a.voice.set_send(a.send)
+        return scale
+
     def medium_values(self) -> dict:
         """Current live medium parameter values (for state snapshots)."""
-        return self.medium.live
+        v = dict(self.medium.live)
+        v["send_scale"] = self.state.send_scale
+        return v
 
     async def teardown(self):
         """Kill all agents and free medium. Drones get a graceful fade-out."""
@@ -237,13 +281,14 @@ class EcosystemManager:
     # Fixed limiter makeup gain (dB). No AGC — OBS owns loudness leveling.
     _MAKEUP_DEFAULT = 8.0
 
-    def __init__(self, sc: SCBridge, on_status=None):
+    def __init__(self, sc: SCBridge, on_status=None, empty: bool = False):
         self.sc = sc
         self.current: Ecosystem | None = None
         self._run_task: asyncio.Task | None = None
         self._limiter_node: int | None = None
         self._on_status = on_status  # callable(dict) — called during transitions
         self._transitioning: bool = False
+        self.empty = empty  # start biomes with no agents (manual spawn only)
 
     @property
     def transitioning(self) -> bool:
@@ -285,7 +330,7 @@ class EcosystemManager:
         if self.current is not None:
             await self._transition_to(biome)
         else:
-            self.current = Ecosystem(biome, self.sc)
+            self.current = Ecosystem(biome, self.sc, empty=self.empty)
             self._run_task = asyncio.create_task(self.current.run())
 
     async def _transition_to(self, new_biome: BiomeSpec):
@@ -314,7 +359,7 @@ class EcosystemManager:
         await asyncio.sleep(overlap_delay)
 
         # Phase 2: Start new ecosystem with silent medium, fade it in
-        self.current = Ecosystem(new_biome, self.sc, start_silent=True)
+        self.current = Ecosystem(new_biome, self.sc, start_silent=True, empty=self.empty)
         new_task = asyncio.create_task(self.current.run())
         fade_in_task = asyncio.create_task(
             self.current.medium.fade_in(duration=fade_in_dur)
@@ -373,7 +418,7 @@ class EcosystemManager:
         self._limiter_node = None
         # Start fresh
         self._ensure_limiter()
-        self.current = Ecosystem(biome, self.sc)
+        self.current = Ecosystem(biome, self.sc, empty=self.empty)
         self._run_task = asyncio.create_task(self.current.run())
         log.info("PANIC recovery complete — new biome seed=%d", biome.seed)
 

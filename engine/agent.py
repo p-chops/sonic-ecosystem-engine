@@ -84,6 +84,12 @@ class Agent:
             self.send = lerp(0.65, 0.95, self.depth)  # drones live deep in the reverb
         self.activity_weight = lerp(1.0, 0.0, self.depth)
 
+        # Base send (pre global scale). A live "immersion" control scales all
+        # agents' send toward the medium/reverb path; new agents inherit it here.
+        self.base_send = self.send
+        send_scale = getattr(ecosystem_state, "send_scale", 1.0)
+        self.send = min(1.0, self.base_send * send_scale)
+
         # Build voice chain with depth-adjusted params
         spec = ChainSpec(
             source=species.chain_spec.source,

@@ -66,6 +66,7 @@ _MIX_PARAMS = {
 _SPECIES_TARGET_RANGE = (0, 64)
 _COUNT_RANGE = (1, 16)
 _ACTIVITY_RANGE = (0.0, 50.0)
+_ARCHETYPES = ("caller", "clicker", "drone", "swarm", "responder")
 
 
 class ControlServer:
@@ -93,9 +94,11 @@ class ControlServer:
             "set_resonance": self._cmd_set_mix,
             "set_species_target": self._cmd_set_species_target,
             "spawn": self._cmd_spawn,
+            "spawn_archetype": self._cmd_spawn_archetype,
             "cull": self._cmd_cull,
             "set_activity": self._cmd_set_activity,
             "bump_activity": self._cmd_bump_activity,
+            "set_medium_send": self._cmd_set_medium_send,
         }
 
     # -- Properties read by the main loop --------------------------------------
@@ -220,6 +223,15 @@ class ControlServer:
         return {"ok": True, "cmd": "spawn",
                 "result": {"species": species, "spawned": spawned}}
 
+    def _cmd_spawn_archetype(self, data):
+        eco = self._require_ecosystem()
+        archetype = data.get("archetype")
+        if not archetype:
+            raise ValueError("missing 'archetype'")
+        count = int(_clamp(int(data.get("count", 1)), *_COUNT_RANGE))
+        result = eco.spawn_archetype(archetype, count)
+        return {"ok": True, "cmd": "spawn_archetype", "result": result}
+
     def _cmd_cull(self, data):
         eco = self._require_ecosystem()
         species = self._req_species(data)
@@ -239,6 +251,13 @@ class ControlServer:
         eco = self._require_ecosystem()
         applied = eco.bump_activity(float(data.get("amount", 1.0)))
         return {"ok": True, "cmd": "bump_activity", "result": {"activity": applied}}
+
+    def _cmd_set_medium_send(self, data):
+        eco = self._require_ecosystem()
+        if data.get("scale") is None:
+            raise ValueError("missing 'scale'")
+        applied = eco.set_medium_send(float(data["scale"]))
+        return {"ok": True, "cmd": "set_medium_send", "result": {"scale": applied}}
 
     # -- Connection handling ---------------------------------------------------
 
@@ -313,8 +332,12 @@ _CAPABILITIES = {
                           "note": "rejected during transition"},
         "set_species_target": {"params": {"species": "str", "n": _SPECIES_TARGET_RANGE}},
         "spawn": {"params": {"species": "str", "count": _COUNT_RANGE}},
+        "spawn_archetype": {"params": {
+            "archetype": list(_ARCHETYPES), "count": _COUNT_RANGE}},
         "cull": {"params": {"species": "str", "count": "int>=1"}},
         "set_activity": {"params": {"value": _ACTIVITY_RANGE}},
         "bump_activity": {"params": {"amount": "float"}},
+        "set_medium_send": {"params": {"scale": (0.0, 2.0)},
+                            "note": "global agent→reverb send; dominant wetness control"},
     },
 }

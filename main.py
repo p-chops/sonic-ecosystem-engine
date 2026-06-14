@@ -46,7 +46,7 @@ async def run(args):
     next_event = asyncio.Event()
 
     # Manager first — control needs a reference to drive the live ecosystem
-    manager = EcosystemManager(sc)
+    manager = EcosystemManager(sc, empty=args.empty)
 
     # Start control server, wired to the manager
     control = ControlServer(next_event, manager=manager, port=args.ws_port)
@@ -122,6 +122,8 @@ def main():
     parser.add_argument("--archetype", type=str, default=None,
                         choices=["caller", "clicker", "drone", "swarm", "responder"],
                         help="force every species to a single archetype (default: mixed)")
+    parser.add_argument("--empty", action="store_true",
+                        help="start with no agents — populate manually via control (spawn_archetype)")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="enable debug logging")
     args = parser.parse_args()
