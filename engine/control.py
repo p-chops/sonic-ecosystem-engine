@@ -99,6 +99,7 @@ class ControlServer:
             "set_activity": self._cmd_set_activity,
             "bump_activity": self._cmd_bump_activity,
             "set_medium_send": self._cmd_set_medium_send,
+            "set_master_leveler": self._cmd_set_master_leveler,
         }
 
     # -- Properties read by the main loop --------------------------------------
@@ -176,6 +177,8 @@ class ControlServer:
             result["status"] = eco.get_status()
             result["medium"] = eco.medium_values()
             result["transitioning"] = self.manager.transitioning
+        if self.manager is not None:
+            result["leveler"] = self.manager._leveler
         return {"ok": True, "cmd": "get_state", "result": result}
 
     def _cmd_capabilities(self, data):
@@ -259,6 +262,20 @@ class ControlServer:
         applied = eco.set_medium_send(float(data["scale"]))
         return {"ok": True, "cmd": "set_medium_send", "result": {"scale": applied}}
 
+    def _cmd_set_master_leveler(self, data):
+        if self.manager is None:
+            raise ValueError("no manager")
+        # Accept both lev_<key> and bare <key>; manager clamps + applies.
+        params = {}
+        for key in ("thresh", "ratio", "attack", "release"):
+            val = data.get("lev_" + key, data.get(key))
+            if val is not None:
+                params[key] = float(val)
+        if not params:
+            raise ValueError("set_master_leveler: no params given")
+        result = self.manager.set_leveler(**params)
+        return {"ok": True, "cmd": "set_master_leveler", "result": result}
+
     # -- Connection handling ---------------------------------------------------
 
     async def _send(self, ws, payload: dict):
@@ -339,5 +356,9 @@ _CAPABILITIES = {
         "bump_activity": {"params": {"amount": "float"}},
         "set_medium_send": {"params": {"scale": (0.0, 2.0)},
                             "note": "global agent→reverb send; dominant wetness control"},
+        "set_master_leveler": {"params": {
+            "lev_thresh": (-60.0, 0.0), "lev_ratio": (1.0, 20.0),
+            "lev_attack": (0.001, 1.0), "lev_release": (0.01, 10.0)},
+            "note": "slow down-only master leveler; narrows macro dynamic range"},
     },
 }

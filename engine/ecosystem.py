@@ -281,6 +281,13 @@ class EcosystemManager:
     # Fixed limiter makeup gain (dB). No AGC — OBS owns loudness leveling.
     _MAKEUP_DEFAULT = 8.0
 
+    # Slow broadband leveler defaults (the "glue" that narrows macro dynamic
+    # range). Gentle + down-only; tunable live via set_leveler.
+    _LEVELER_DEFAULTS = {"thresh": -24.0, "ratio": 3.0, "attack": 0.15, "release": 3.0}
+    # Clamp ranges for live leveler control.
+    _LEVELER_RANGES = {"thresh": (-60.0, 0.0), "ratio": (1.0, 20.0),
+                       "attack": (0.001, 1.0), "release": (0.01, 10.0)}
+
     def __init__(self, sc: SCBridge, on_status=None, empty: bool = False):
         self.sc = sc
         self.current: Ecosystem | None = None
@@ -289,6 +296,7 @@ class EcosystemManager:
         self._on_status = on_status  # callable(dict) — called during transitions
         self._transitioning: bool = False
         self.empty = empty  # start biomes with no agents (manual spawn only)
+        self._leveler = dict(self._LEVELER_DEFAULTS)  # current leveler params
 
     @property
     def transitioning(self) -> bool:
@@ -322,7 +330,29 @@ class EcosystemManager:
                 xover_lo=200,
                 xover_hi=3000,
                 makeup=self._MAKEUP_DEFAULT,
+                lev_thresh=self._leveler["thresh"],
+                lev_ratio=self._leveler["ratio"],
+                lev_attack=self._leveler["attack"],
+                lev_release=self._leveler["release"],
             )
+
+    def set_leveler(self, thresh: float | None = None, ratio: float | None = None,
+                    attack: float | None = None, release: float | None = None) -> dict:
+        """Live-tune the slow master leveler. Clamps + applies provided params to
+        the limiter node. Returns the full current leveler param set."""
+        incoming = {"thresh": thresh, "ratio": ratio,
+                    "attack": attack, "release": release}
+        applied = {}
+        for key, val in incoming.items():
+            if val is None:
+                continue
+            lo, hi = self._LEVELER_RANGES[key]
+            v = max(lo, min(hi, float(val)))
+            self._leveler[key] = v
+            applied[f"lev_{key}"] = v
+        if applied and self._limiter_node is not None:
+            self.sc.set(self._limiter_node, **applied)
+        return dict(self._leveler)
 
     async def start_biome(self, biome: BiomeSpec):
         """Start a new biome, transitioning from any current one."""

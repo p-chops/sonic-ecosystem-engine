@@ -122,7 +122,8 @@ SynthDef(\med_master, { |in=0, out=0,
 	lo_ratio=12, mid_ratio=10, hi_ratio=8,
 	lo_attack=0.05, mid_attack=0.02, hi_attack=0.01,
 	lo_release=0.6, mid_release=0.4, hi_release=0.3,
-	xover_lo=200, xover_hi=3000|
+	xover_lo=200, xover_hi=3000,
+	lev_thresh=(-24), lev_ratio=3, lev_attack=0.15, lev_release=3.0|
 
 	var sig = In.ar(in, 2);
 	var lo, mid, hi;
@@ -169,6 +170,18 @@ SynthDef(\med_master, { |in=0, out=0,
 
 	// --- Recombine ---
 	sig = lo + mid + hi;
+
+	// --- Slow broadband leveler ("glue") ---
+	// Long release rides slow macro level (biome-to-biome, population drift)
+	// that the fast per-band compressors don't catch. Down-only (slopeBelow:1)
+	// so it never lifts silence / the noise floor — OBS does upward makeup.
+	sig = Compander.ar(sig, sig,
+		thresh: lev_thresh.dbamp,
+		slopeBelow: 1,
+		slopeAbove: (1 / lev_ratio.max(1)),
+		clampTime: lev_attack.clip(0.001, 1),
+		relaxTime: lev_release.clip(0.01, 10)
+	);
 
 	// Broadband makeup gain
 	sig = sig * makeup.dbamp;
