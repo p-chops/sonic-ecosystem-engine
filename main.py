@@ -2,15 +2,14 @@
 
 Connects to a running scsynth, loads synthdefs, and cycles through
 randomly generated biomes with crossfade transitions. Auto-advances
-on a timer. Control via:
-  - stdin: type 'n' + Enter to skip to next biome
-  - websocket: connect to ws://localhost:8765, send {"cmd": "next"}
+on a timer. Control via websocket: connect to ws://localhost:8765.
 
 Usage:
   python main.py                     # default settings
   python main.py --port 57110        # custom scsynth port
   python main.py --duration 900      # 15 min per biome
   python main.py --seed 42           # start with a specific seed
+  python main.py --archetype drone   # all species are drones (or caller/clicker/swarm/responder)
   python main.py --ws-port 8765      # websocket control port
 
 Requires scsynth already running (boot via SC IDE: s.boot).
@@ -23,7 +22,6 @@ import asyncio
 import logging
 import os
 import random
-import sys
 
 from engine.bridge import SCBridge
 from engine.control import ControlServer
@@ -34,28 +32,6 @@ SYNTHDEF_DIR = os.path.join(os.path.dirname(__file__), "synthdefs", "compiled")
 
 log = logging.getLogger("see")
 
-
-async def stdin_listener(next_event: asyncio.Event):
-    """Listen for 'n' on stdin to trigger next biome.
-
-    Uses a thread to avoid connect_read_pipe which puts stdin/stdout
-    into non-blocking mode and causes BlockingIOError on print().
-    """
-    loop = asyncio.get_event_loop()
-
-    def _read_stdin():
-        while True:
-            try:
-                line = sys.stdin.readline()
-            except EOFError:
-                break
-            if not line:
-                break
-            cmd = line.strip().lower()
-            if cmd in ("n", "next"):
-                loop.call_soon_threadsafe(next_event.set)
-
-    await loop.run_in_executor(None, _read_stdin)
 
 
 async def run(args):
@@ -69,27 +45,28 @@ async def run(args):
 
     next_event = asyncio.Event()
 
-    # Start control server
-    control = ControlServer(next_event, port=args.ws_port)
+    # Manager first — control needs a reference to drive the live ecosystem
+    manager = EcosystemManager(sc)
+
+    # Start control server, wired to the manager
+    control = ControlServer(next_event, manager=manager, port=args.ws_port)
     await control.start()
 
-    manager = EcosystemManager(sc, on_status=control.push_status)
+    manager._on_status = control.push_status
 
-    # Start stdin listener
-    asyncio.create_task(stdin_listener(next_event))
 
     seed = args.seed if args.seed is not None else random.randint(0, 99999)
 
     print(f"\n{'=' * 60}")
     print(f"  Sonic Ecosystem Engine")
     print(f"  Auto-advance: {args.duration}s per biome")
-    print(f"  Control: stdin ('n') or ws://localhost:{args.ws_port}")
+    print(f"  Control: ws://localhost:{args.ws_port}")
     print(f"{'=' * 60}\n")
 
     panic = False
     try:
         while True:
-            biome = generate_biome(seed)
+            biome = generate_biome(seed, force_archetype=args.archetype)
             summary = biome.summary()
             print(f"\n--- Biome seed={seed} ---")
             print(summary)
@@ -142,6 +119,9 @@ def main():
                         help="seconds per biome before auto-advance (default: 600)")
     parser.add_argument("--seed", type=int, default=None,
                         help="starting seed (default: random)")
+    parser.add_argument("--archetype", type=str, default=None,
+                        choices=["caller", "clicker", "drone", "swarm", "responder"],
+                        help="force every species to a single archetype (default: mixed)")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="enable debug logging")
     args = parser.parse_args()
