@@ -72,7 +72,7 @@ class Agent:
         self.amp = base_amp * source_gain
 
         if species.archetype == "drone":
-            self.amp *= 0.7  # drones sit underneath but stay present
+            self.amp *= 1.25  # drones are the bed — lift them; stays lush via high reverb send
 
         # Size-based amplitude for callers: small/high creatures are quieter
         size = species.params.get("size")

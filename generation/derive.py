@@ -316,14 +316,17 @@ def _derive_drone_params(dna: MacroDNA, rng: random.Random) -> dict:
         # Pan wander
         "pan_drift_rate": rng.uniform(0.02, 0.15),  # Hz — very slow LFO
         "pan_drift_range": rng.uniform(0.3, 0.9),    # how wide the pan sweeps
-        # Medium send wander — drones breathe in and out of the reverb
+        # Medium send wander — drones breathe in and out of the reverb.
+        # Lowered from 0.5-1.0 so drones keep real dry presence (louder), still
+        # reverberant at the top of the sweep.
         "send_drift_rate": rng.uniform(0.01, 0.08),
-        "send_lo": rng.uniform(0.5, 0.7),
-        "send_hi": rng.uniform(0.85, 1.0),
-        # Filter sweep — slow spectral movement
+        "send_lo": rng.uniform(0.3, 0.5),
+        "send_hi": rng.uniform(0.6, 0.85),
+        # Filter sweep — slow spectral movement. Floor raised from 200-600 so the
+        # sweep never dulls the harmonics into a filtered-down sine.
         "filter_drift_rate": rng.uniform(0.01, 0.1),
-        "filter_lo": lerp(200, 600, rng.random()),
-        "filter_hi": lerp(3000, 8000, rng.random()),
+        "filter_lo": lerp(900, 2500, rng.random()),
+        "filter_hi": lerp(6000, 12000, rng.random()),
         # Amplitude breathing — slow swell and recede
         "amp_breath_rate": rng.uniform(0.02, 0.08),  # Hz
         "amp_breath_depth": rng.uniform(0.15, 0.4),   # 0=flat, 1=full fade
@@ -384,17 +387,22 @@ def _derive_source_params(source: str, dna: MacroDNA, rng: random.Random,
     env_type = rng.choices([0, 1, 2, 3], weights=env_weights, k=1)[0]
 
     if source == "src_sine":
-        # Drones: fewer partials, steeper falloff — avoid sustained high-freq tinnitus
+        # Drones: rich harmonic stack so they read as a present timbre, not a
+        # filtered-down sine. Many partials + slow falloff = audible overtones.
+        # (Drone fundamentals are capped low ~300Hz, so even 8 partials stay
+        # below ~2.4kHz — bright but not tinnitus.)
         if archetype == "drone":
-            n_partials = rng.choice([2, 3, 4])
-            falloff = rng.uniform(0.3, 0.6)
+            n_partials = rng.choice([5, 6, 7, 8])
+            falloff = rng.uniform(0.6, 0.85)
+            spread = rng.uniform(0.1, 0.5)  # a little inharmonic shimmer for movement
         else:
             n_partials = rng.choice([2, 3, 4, 5, 6])
             falloff = rng.uniform(0.3, 0.7)
+            spread = rng.uniform(0.05, 0.4)
         return {
             "env_type": env_type,
             "n_partials": n_partials,
-            "partial_spread": rng.uniform(0.05, 0.4),
+            "partial_spread": spread,
             "partial_falloff": falloff,
         }
 

@@ -100,6 +100,7 @@ class ControlServer:
             "bump_activity": self._cmd_bump_activity,
             "set_medium_send": self._cmd_set_medium_send,
             "set_master_leveler": self._cmd_set_master_leveler,
+            "set_empty": self._cmd_set_empty,
         }
 
     # -- Properties read by the main loop --------------------------------------
@@ -179,6 +180,7 @@ class ControlServer:
             result["transitioning"] = self.manager.transitioning
         if self.manager is not None:
             result["leveler"] = self.manager._leveler
+            result["empty"] = self.manager.empty
         return {"ok": True, "cmd": "get_state", "result": result}
 
     def _cmd_capabilities(self, data):
@@ -233,6 +235,12 @@ class ControlServer:
             raise ValueError("missing 'archetype'")
         count = int(_clamp(int(data.get("count", 1)), *_COUNT_RANGE))
         result = eco.spawn_archetype(archetype, count)
+        # If this spawned a species the UI hasn't seen (e.g. an archetype the
+        # biome lacked → freshly minted), re-broadcast the biome so the
+        # sonar/legend pick it up. Otherwise minted creatures stay invisible.
+        known = {s.get("name") for s in (self._current_biome or {}).get("species", [])}
+        if result.get("species") not in known:
+            self.set_current_biome(eco.biome)
         return {"ok": True, "cmd": "spawn_archetype", "result": result}
 
     def _cmd_cull(self, data):
@@ -275,6 +283,14 @@ class ControlServer:
             raise ValueError("set_master_leveler: no params given")
         result = self.manager.set_leveler(**params)
         return {"ok": True, "cmd": "set_master_leveler", "result": result}
+
+    def _cmd_set_empty(self, data):
+        if self.manager is None:
+            raise ValueError("no manager")
+        if data.get("on") is None:
+            raise ValueError("missing 'on'")
+        applied = self.manager.set_empty(bool(data["on"]))
+        return {"ok": True, "cmd": "set_empty", "result": {"empty": applied}}
 
     # -- Connection handling ---------------------------------------------------
 
@@ -360,5 +376,7 @@ _CAPABILITIES = {
             "lev_thresh": (-60.0, 0.0), "lev_ratio": (1.0, 20.0),
             "lev_attack": (0.001, 1.0), "lev_release": (0.01, 10.0)},
             "note": "slow down-only master leveler; narrows macro dynamic range"},
+        "set_empty": {"params": {"on": "bool"},
+                      "note": "empty biome (redemptions-only); persists across biomes"},
     },
 }

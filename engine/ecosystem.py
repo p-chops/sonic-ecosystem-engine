@@ -245,6 +245,21 @@ class Ecosystem:
                 a.voice.set_send(a.send)
         return scale
 
+    def set_empty(self, on: bool) -> bool:
+        """Empty the biome (redemptions/manual spawns only) or restore it.
+        on=True: zero all species targets + gracefully fade out current agents.
+        on=False: restore biome default population targets (auto-spawn resumes)."""
+        if on:
+            for name in self.state.species_targets:
+                self.state.species_targets[name] = 0
+            for a in list(self.agents):
+                if a.alive:
+                    asyncio.create_task(a.graceful_die())
+        else:
+            for sp in self.biome.species:
+                self.state.species_targets[sp.name] = sp.population
+        return on
+
     def medium_values(self) -> dict:
         """Current live medium parameter values (for state snapshots)."""
         v = dict(self.medium.live)
@@ -353,6 +368,14 @@ class EcosystemManager:
         if applied and self._limiter_node is not None:
             self.sc.set(self._limiter_node, **applied)
         return dict(self._leveler)
+
+    def set_empty(self, on: bool) -> bool:
+        """Toggle empty mode. Persists across biomes (future biomes start empty)
+        and applies to the current biome immediately."""
+        self.empty = bool(on)
+        if self.current is not None:
+            self.current.set_empty(self.empty)
+        return self.empty
 
     async def start_biome(self, biome: BiomeSpec):
         """Start a new biome, transitioning from any current one."""

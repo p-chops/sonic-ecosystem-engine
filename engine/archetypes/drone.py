@@ -127,7 +127,7 @@ class DroneBehavior(Behavior):
             # Inverse coupling: duck amplitude when activity is high
             if self.inverse_coupling:
                 activity = self.agent.ecosystem_state.activity
-                duck = lerp(1.0, 0.2, min(activity / 5.0, 1.0))
+                duck = lerp(1.0, 0.5, min(activity / 5.0, 1.0))
                 self.current_amp = self.target_amp * duck * breath
             else:
                 self.current_amp = self.target_amp * breath
