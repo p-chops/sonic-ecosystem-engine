@@ -714,8 +714,12 @@ def estimate_biome_energy(biome: BiomeSpec) -> float:
     return total
 
 
-def generate_biome(seed: int) -> BiomeSpec:
-    """Generate a complete biome specification from a seed. Deterministic."""
+def generate_biome(seed: int, force_archetype: str | None = None) -> BiomeSpec:
+    """Generate a complete biome specification from a seed. Deterministic.
+
+    If force_archetype is given, every species in the biome will be that
+    archetype (must be one of: caller, clicker, drone, swarm, responder).
+    """
     rng = random.Random(seed)
 
     # Macro DNA
@@ -732,14 +736,17 @@ def generate_biome(seed: int) -> BiomeSpec:
 
     # Species count and archetype distribution
     n_species = max(3, int(lerp(4, 10, dna.density)))
-    archetype_weights = {
-        "caller":    max(0.01, dna.sociality * dna.temporal),
-        "clicker":   max(0.01, dna.temporal * (1 - dna.sociality * 0.5)),
-        "drone":     max(0.01, 1 - dna.temporal),
-        "swarm":     max(0.01, dna.density * dna.temporal * 0.5),
-        "responder": max(0.01, dna.sociality * 0.3),
-    }
-    archetypes = _weighted_sample(archetype_weights, n_species, rng)
+    if force_archetype is not None:
+        archetypes = [force_archetype] * n_species
+    else:
+        archetype_weights = {
+            "caller":    max(0.01, dna.sociality * dna.temporal),
+            "clicker":   max(0.01, dna.temporal * (1 - dna.sociality * 0.5)),
+            "drone":     max(0.01, 1 - dna.temporal),
+            "swarm":     max(0.01, dna.density * dna.temporal * 0.5),
+            "responder": max(0.01, dna.sociality * 0.3),
+        }
+        archetypes = _weighted_sample(archetype_weights, n_species, rng)
 
     # Derive each species
     species = [

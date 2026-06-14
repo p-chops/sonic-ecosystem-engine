@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import random
 from typing import TYPE_CHECKING
 
@@ -151,6 +150,63 @@ class Ecosystem:
             "nodes": self.sc.node_count_estimate(),
         }
 
+    # -- Live control (external apps via websocket) ---------------------------
+
+    def _species_by_name(self, name: str):
+        for sp in self.biome.species:
+            if sp.name == name:
+                return sp
+        return None
+
+    def set_species_target(self, name: str, n: int) -> int:
+        """Set a species' population target. Spawn loop converges over next ticks.
+        Returns the clamped value applied."""
+        if name not in self.state.species_targets:
+            raise ValueError(f"unknown species: {name}")
+        n = max(0, min(64, int(n)))
+        self.state.species_targets[name] = n
+        return n
+
+    def spawn(self, name: str, count: int = 1) -> int:
+        """Spawn agents of a species immediately (bypasses per-tick spawn limit).
+        Returns how many were spawned."""
+        species = self._species_by_name(name)
+        if species is None:
+            raise ValueError(f"unknown species: {name}")
+        count = max(1, min(16, int(count)))
+        for _ in range(count):
+            self._spawn_agent(species)
+        return count
+
+    def cull(self, name: str, count: int = 1) -> int:
+        """Kill the oldest N agents of a species immediately.
+        Returns how many were culled."""
+        if self._species_by_name(name) is None:
+            raise ValueError(f"unknown species: {name}")
+        count = max(1, int(count))
+        victims = sorted(
+            (a for a in self.agents if a.alive and a.species.name == name),
+            key=lambda a: a.age, reverse=True,
+        )[:count]
+        for a in victims:
+            a.die()
+        self.agents = [a for a in self.agents if a.alive]
+        return len(victims)
+
+    def set_activity(self, value: float) -> float:
+        """Set the shared activity level absolutely. Decays each tick.
+        Drives flocking (pause compression) and responder firing."""
+        self.state.activity = max(0.0, min(50.0, float(value)))
+        return self.state.activity
+
+    def bump_activity(self, amount: float = 1.0) -> float:
+        """Add to the shared activity level. Returns the new level."""
+        return self.set_activity(self.state.activity + float(amount))
+
+    def medium_values(self) -> dict:
+        """Current live medium parameter values (for state snapshots)."""
+        return self.medium.live
+
     async def teardown(self):
         """Kill all agents and free medium. Drones get a graceful fade-out."""
         self.alive = False
@@ -172,18 +228,14 @@ class Ecosystem:
 
 
 class EcosystemManager:
-    """Manages biome transitions — crossfading between ecosystems."""
+    """Manages biome transitions — crossfading between ecosystems.
 
-    # Energy estimation reference — a "typical" biome's estimated energy.
-    # Biomes below this get boosted, above get attenuated.
-    _REFERENCE_ENERGY = 0.6
-    # Makeup gain range (dB). Default is 8dB; estimation shifts within this range.
-    _MAKEUP_MIN = 0.0
-    _MAKEUP_MAX = 24.0
+    Loudness leveling is handled downstream (OBS). The engine keeps a fixed
+    multiband mastering limiter (brickwall safety) but no auto gain control.
+    """
+
+    # Fixed limiter makeup gain (dB). No AGC — OBS owns loudness leveling.
     _MAKEUP_DEFAULT = 8.0
-    # AGC smoothing — how fast the AGC corrects (0=frozen, 1=instant)
-    _AGC_SMOOTHING = 0.25
-    _AGC_INTERVAL = 3.0  # seconds between AGC adjustments
 
     def __init__(self, sc: SCBridge, on_status=None):
         self.sc = sc
@@ -191,32 +243,11 @@ class EcosystemManager:
         self._run_task: asyncio.Task | None = None
         self._limiter_node: int | None = None
         self._on_status = on_status  # callable(dict) — called during transitions
-        self._current_makeup: float = self._MAKEUP_DEFAULT
-        self._target_makeup: float = self._MAKEUP_DEFAULT
-        self._agc_task: asyncio.Task | None = None
+        self._transitioning: bool = False
 
-    def _compute_makeup(self, biome: BiomeSpec) -> float:
-        """Compute limiter makeup gain (dB) to normalize a biome's output level."""
-        from generation.derive import estimate_biome_energy
-
-        energy = estimate_biome_energy(biome)
-        if energy <= 0:
-            return self._MAKEUP_DEFAULT
-
-        # dB compensation: quiet biomes get more gain, loud ones get less
-        compensation_db = -10 * math.log10(energy / self._REFERENCE_ENERGY)
-        makeup = self._MAKEUP_DEFAULT + compensation_db
-        makeup = max(self._MAKEUP_MIN, min(self._MAKEUP_MAX, makeup))
-
-        log.info("Biome energy=%.3f → makeup=%.1fdB (compensation=%+.1fdB)",
-                 energy, makeup, compensation_db)
-        return makeup
-
-    def _set_makeup(self, db: float):
-        """Apply makeup gain to the limiter node."""
-        self._current_makeup = db
-        if self._limiter_node is not None:
-            self.sc.set(self._limiter_node, makeup=db)
+    @property
+    def transitioning(self) -> bool:
+        return self._transitioning
 
     def _ensure_limiter(self):
         """Create a persistent multi-band mastering chain on bus 0."""
@@ -245,51 +276,15 @@ class EcosystemManager:
                 hi_release=0.3,
                 xover_lo=200,
                 xover_hi=3000,
-                makeup=self._current_makeup,
+                makeup=self._MAKEUP_DEFAULT,
             )
-
-    async def _agc_loop(self):
-        """Reactive automatic gain control — recomputes target from live agent
-        state every tick and smoothly adjusts makeup to compensate."""
-        while True:
-            await asyncio.sleep(self._AGC_INTERVAL)
-            if self.current is None or self._limiter_node is None:
-                continue
-
-            # Recompute target from actual live energy
-            live_energy = self.current.current_energy()
-            if live_energy > 0:
-                compensation_db = -10 * math.log10(live_energy / self._REFERENCE_ENERGY)
-                self._target_makeup = max(self._MAKEUP_MIN,
-                    min(self._MAKEUP_MAX, self._MAKEUP_DEFAULT + compensation_db))
-
-            # Log node counts for leak detection
-            counts = self.sc.node_count_estimate()
-            log.debug("Nodes: %d persistent, %d transient (overcounted), ~%d total",
-                      counts["persistent"], counts["transient"], counts["total_estimate"])
-
-            # Smooth exponential approach to target
-            error = self._target_makeup - self._current_makeup
-            if abs(error) > 0.1:  # don't bother with sub-0.1dB adjustments
-                new_makeup = self._current_makeup + error * self._AGC_SMOOTHING
-                new_makeup = max(self._MAKEUP_MIN, min(self._MAKEUP_MAX, new_makeup))
-                self._set_makeup(new_makeup)
-
-    def _start_agc(self):
-        """Start the AGC background loop if not already running."""
-        if self._agc_task is None or self._agc_task.done():
-            self._agc_task = asyncio.create_task(self._agc_loop())
 
     async def start_biome(self, biome: BiomeSpec):
         """Start a new biome, transitioning from any current one."""
         self._ensure_limiter()
-        self._target_makeup = self._compute_makeup(biome)
-        self._start_agc()
         if self.current is not None:
             await self._transition_to(biome)
         else:
-            # First biome — apply makeup immediately
-            self._set_makeup(self._target_makeup)
             self.current = Ecosystem(biome, self.sc)
             self._run_task = asyncio.create_task(self.current.run())
 
@@ -307,9 +302,7 @@ class EcosystemManager:
         fade_in_dur = 8.0
         overlap_delay = 3.0
         deadline = 15.0
-
-        # Set new makeup target — AGC will smoothly interpolate during crossfade
-        self._target_makeup = self._compute_makeup(new_biome)
+        self._transitioning = True
 
         # Phase 1: Stop spawning old agents + begin fading out old medium
         old.stop_spawning()
@@ -354,6 +347,7 @@ class EcosystemManager:
         log.info("Transition: old biome torn down after %.1fs", elapsed)
 
         self._run_task = new_task
+        self._transitioning = False
 
     def _push_status(self, status: dict):
         if self._on_status:
@@ -368,13 +362,7 @@ class EcosystemManager:
         # Kill everything on the SC server
         self.sc.free_all()
         # Reset Python-side state
-        if self._agc_task is not None:
-            self._agc_task.cancel()
-            try:
-                await self._agc_task
-            except asyncio.CancelledError:
-                pass
-            self._agc_task = None
+        self._transitioning = False
         if self._run_task is not None:
             self._run_task.cancel()
             try:
@@ -383,25 +371,14 @@ class EcosystemManager:
                 pass
         self.current = None
         self._limiter_node = None
-        self._current_makeup = self._MAKEUP_DEFAULT
         # Start fresh
         self._ensure_limiter()
-        self._target_makeup = self._compute_makeup(biome)
-        self._set_makeup(self._target_makeup)
-        self._start_agc()
         self.current = Ecosystem(biome, self.sc)
         self._run_task = asyncio.create_task(self.current.run())
         log.info("PANIC recovery complete — new biome seed=%d", biome.seed)
 
     async def stop(self):
         """Stop everything."""
-        if self._agc_task is not None:
-            self._agc_task.cancel()
-            try:
-                await self._agc_task
-            except asyncio.CancelledError:
-                pass
-            self._agc_task = None
         if self.current is not None:
             self.current.alive = False
             if self._run_task is not None:

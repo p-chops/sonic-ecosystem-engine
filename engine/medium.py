@@ -54,6 +54,22 @@ class Medium:
         # Build the chain
         self._build(spec, start_silent)
 
+        # Live parameter values (target levels, updated by setters). Reflects
+        # what external controllers have set, for state snapshots.
+        self.live = {
+            "reverb": {
+                "roomsize": spec.reverb_roomsize,
+                "revtime": spec.reverb_time,
+                "damping": spec.reverb_damping,
+                "mix": self._target_reverb_mix,
+            },
+            "noise_floor": {
+                "level": spec.noise_floor_level,
+                "color": spec.noise_floor_color,
+            },
+            "resonance": {"mix": self._target_reson_mix},
+        }
+
     def _build(self, spec: MediumSpec, start_silent: bool):
         sc = self.sc
 
@@ -126,6 +142,7 @@ class Medium:
             params["mix"] = mix
         if params:
             self.sc.set(self._reverb_node, **params)
+            self.live["reverb"].update(params)
 
     def set_noise_floor(self, level: float | None = None, color: float | None = None):
         params = {}
@@ -135,6 +152,7 @@ class Medium:
             params["color"] = color
         if params:
             self.sc.set(self._noise_node, **params)
+            self.live["noise_floor"].update(params)
 
     def set_eq(self, **params):
         if params:
@@ -148,6 +166,7 @@ class Medium:
             params["mix"] = mix
         if params:
             self.sc.set(self._reson_node, **params)
+            self.live["resonance"].update(params)
 
     async def fade_in(self, duration: float = 8.0, steps: int = 20):
         """Gradually bring the medium from silence to its target levels."""
