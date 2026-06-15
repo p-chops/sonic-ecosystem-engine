@@ -24,6 +24,7 @@ class Species:
     population: int
     age_range: tuple[int, int]       # (min_ticks, max_ticks) lifespan
     depth_dist: str = "sqrt"         # "sqrt", "uniform", "close"
+    amp_boost: float = 1.0           # extra amplitude multiplier (prominent/redeemed species)
 
     # Archetype-specific params (dict so archetypes can pull what they need)
     params: dict = field(default_factory=dict)

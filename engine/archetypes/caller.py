@@ -26,12 +26,18 @@ class CallerBehavior(Behavior):
 
         # Parameters with defaults
         self.base_pause = self.params.get("base_pause", (1.0, 5.0))
-        self.glide_prob = self.params.get("glide_prob", 0.2)
-        self.transpose_prob = self.params.get("transpose_prob", 0.15)
 
-        # Build song from species template — shared melody, per-agent amplitude
+        # Build song from species template — shared melody, per-agent amplitude.
         song_template = self.params.get("song_template", [])
-        pitches = agent.pitches
+        pitches = agent.pitches  # sorted ascending
+
+        # Source separation: confine this caller to its OWN register band, fixed
+        # at spawn, so one caller reads as a single voice (no register hopping)
+        # and multiple callers of a species spread across distinct registers.
+        # Band ~1/3 of the species range; random start scatters callers.
+        window = max(3, len(pitches) // 3)
+        start = rng.randint(0, max(0, len(pitches) - window))
+        my_pitches = pitches[start:start + window]
 
         # Depth reduces song complexity — deep agents sing a truncated version
         song_length = self.params.get("song_length", len(song_template))
@@ -40,7 +46,7 @@ class CallerBehavior(Behavior):
         self.song = []
         for note in song_template[:effective_length]:
             self.song.append({
-                "freq": pitches[note["pitch_index"] % len(pitches)],
+                "freq": my_pitches[note["pitch_index"] % len(my_pitches)],
                 "amp": agent.amp * note["amp_scale"],
                 "decay": note["decay"],
                 "gap": note["gap"],
@@ -50,20 +56,9 @@ class CallerBehavior(Behavior):
         rng = self.agent.rng
 
         while self.agent.alive:
-            # Occasionally transpose the song
-            transpose = 1.0
-            if rng.random() < self.transpose_prob:
-                transpose = rng.choice([0.5, 0.75, 1.0, 1.5, 2.0])
-
-            # Sing the song as a bundle
-            transposed = []
-            for note in self.song:
-                transposed.append({
-                    **note,
-                    "freq": note["freq"] * transpose,
-                    "amp": note["amp"],
-                })
-            self.agent.voice.vocalize_song(transposed)
+            # Sing the song in this caller's fixed register (no transposition —
+            # each caller stays put so it reads as a single source).
+            self.agent.voice.vocalize_song(self.song)
             self.agent.contribute_activity(len(self.song) * 0.3)
 
             # Wait for song to finish

@@ -234,7 +234,8 @@ class ControlServer:
         if not archetype:
             raise ValueError("missing 'archetype'")
         count = int(_clamp(int(data.get("count", 1)), *_COUNT_RANGE))
-        result = eco.spawn_archetype(archetype, count)
+        result = eco.spawn_archetype(archetype, count,
+                                     prominent=bool(data.get("prominent", False)))
         # If this spawned a species the UI hasn't seen (e.g. an archetype the
         # biome lacked → freshly minted), re-broadcast the biome so the
         # sonar/legend pick it up. Otherwise minted creatures stay invisible.
@@ -366,7 +367,8 @@ _CAPABILITIES = {
         "set_species_target": {"params": {"species": "str", "n": _SPECIES_TARGET_RANGE}},
         "spawn": {"params": {"species": "str", "count": _COUNT_RANGE}},
         "spawn_archetype": {"params": {
-            "archetype": list(_ARCHETYPES), "count": _COUNT_RANGE}},
+            "archetype": list(_ARCHETYPES), "count": _COUNT_RANGE,
+            "prominent": "bool? — mint a fresh loud+active+persistent species"}},
         "cull": {"params": {"species": "str", "count": "int>=1"}},
         "set_activity": {"params": {"value": _ACTIVITY_RANGE}},
         "bump_activity": {"params": {"amount": "float"}},

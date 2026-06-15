@@ -33,6 +33,10 @@ _SOURCE_GAIN = {
     "src_string":  1.0,   # similar energy to FM
 }
 
+# Minimum effective amplitude for any agent — guarantees background agents
+# stay audible after depth/source/size multipliers. Tune by ear.
+AMP_FLOOR = 0.2
+
 
 class Agent:
     """A single agent in the ecosystem. Owns a voice chain and delegates
@@ -46,6 +50,7 @@ class Agent:
         ecosystem_state,
         rng: stdlib_random.Random,
         parent_group: int = 1,
+        depth: float | None = None,
     ):
         self.species = species
         self.sc = sc
@@ -55,8 +60,8 @@ class Agent:
         self.max_age = rng.randint(*species.age_range)
         self.rng = rng
 
-        # Depth model
-        self.depth = species.draw_depth(rng)
+        # Depth model — caller may force a depth (e.g. foreground for paid spawns)
+        self.depth = species.draw_depth(rng) if depth is None else depth
         self.pos = rng.uniform(-1.0, 1.0)  # pan position
 
         # Depth-derived parameters
@@ -68,7 +73,9 @@ class Agent:
         #
         source_gain = _SOURCE_GAIN.get(species.chain_spec.source, 1.0)
 
-        base_amp = lerp(0.5, 0.12, self.depth)  # ~12dB foreground/background spread
+        # Amplitude is kept nearly flat with depth — depth is conveyed by reverb
+        # send (below), not by volume, so background agents stay audible.
+        base_amp = lerp(0.5, 0.4, self.depth)
         self.amp = base_amp * source_gain
 
         if species.archetype == "drone":
@@ -78,6 +85,12 @@ class Agent:
         size = species.params.get("size")
         if size is not None:
             self.amp *= lerp(0.6, 1.0, size)  # small=0.6x, large=1.0x
+
+        # Hard floor so source-gain × size compounding can't make an agent inaudible.
+        self.amp = max(self.amp, AMP_FLOOR)
+
+        # Per-species amplitude boost (prominent/redeemed species sit up front).
+        self.amp *= getattr(species, "amp_boost", 1.0)
 
         self.send = lerp(0.1, 0.8, self.depth)
         if species.archetype == "drone":
@@ -102,7 +115,7 @@ class Agent:
         )
 
         # Apply depth-based LPF darkening: close=full brightness, far=dark
-        lpf_cutoff = lerp(12000, 800, self.depth ** 0.7)
+        lpf_cutoff = lerp(12000, 2500, self.depth ** 0.7)
         has_lpf = any(name == "fx_lpf" for name, _ in spec.effects)
         if has_lpf:
             # Adjust existing LPF — take the minimum of species cutoff and depth cutoff

@@ -44,12 +44,19 @@ class EcosystemState:
 class Ecosystem:
     """Runs a single biome: population management, activity decay, medium."""
 
+    # Prominent (redeemed) species are time-limited so none dominates forever.
+    _PROMINENT_CAP = 6      # max concurrent prominent species (FIFO retire)
+    _PROMINENT_TTL = 40     # ticks a prominent species persists (~40*3s = 2min)
+
     def __init__(self, biome: BiomeSpec, sc: SCBridge, start_silent: bool = False,
                  empty: bool = False):
         self.biome = biome
         self.sc = sc
         self.state = EcosystemState(biome, empty=empty)
         self._adhoc_idx = 1000  # name counter for on-demand minted species
+        self._tick = 0
+        self._prominent: list[dict] = []   # [{name, born}] active prominent species
+        self._retired: set[str] = set()    # prominent species pending prune
         # Agent group first, medium group second — execution order matters.
         # Agents write to the medium bus; medium must read after agents.
         self.agents_group = sc.new_group()
@@ -64,11 +71,34 @@ class Ecosystem:
         log.info("Ecosystem starting: seed=%d, %d species",
                  self.biome.seed, len(self.biome.species))
         while self.alive:
+            self._tick += 1
+            self._reap_prominent()
             self._age_and_cull()
             if self._spawning:
                 self._spawn_to_targets()
             self._decay_activity()
             await asyncio.sleep(self.state.tick_interval)
+
+    def _reap_prominent(self):
+        """Retire prominent species past their TTL, and enforce the concurrent
+        cap (oldest first), so a redeemed voice recedes instead of dominating."""
+        keep = []
+        for e in self._prominent:
+            if self._tick - e["born"] >= self._PROMINENT_TTL:
+                self._retire_prominent(e["name"])
+            else:
+                keep.append(e)
+        self._prominent = keep
+        while len(self._prominent) > self._PROMINENT_CAP:
+            self._retire_prominent(self._prominent.pop(0)["name"])
+
+    def _retire_prominent(self, name: str):
+        """Stop a prominent species respawning and fade out its live agents."""
+        self.state.species_targets[name] = 0
+        for a in self.agents:
+            if a.alive and a.species.name == name:
+                self._tasks.append(asyncio.create_task(a.graceful_die()))
+        self._retired.add(name)
 
     def _age_and_cull(self):
         for agent in self.agents:
@@ -76,6 +106,16 @@ class Ecosystem:
             if agent.age >= agent.max_age:
                 agent.die()
         self.agents = [a for a in self.agents if a.alive]
+        # Prune retired prominent species once their agents are gone, so the
+        # biome species list doesn't grow without bound.
+        if self._retired:
+            alive_names = {a.species.name for a in self.agents}
+            gone = [n for n in self._retired if n not in alive_names]
+            for n in gone:
+                self.biome.species[:] = [sp for sp in self.biome.species
+                                         if sp.name != n]
+                self.state.species_targets.pop(n, None)
+                self._retired.discard(n)
         # Clean up finished tasks
         self._tasks = [t for t in self._tasks if not t.done()]
 
@@ -94,10 +134,13 @@ class Ecosystem:
                 self._spawn_agent(species)
                 spawned += 1
 
-    def _spawn_agent(self, species) -> Agent:
+    def _spawn_agent(self, species, foreground: bool = False) -> Agent:
         rng = random.Random()
+        # Paid/manual spawns land in the foreground (close = dry, bright, present)
+        # instead of drawing a possibly-far depth that buries them in reverb.
+        depth = rng.uniform(0.0, 0.25) if foreground else None
         agent = Agent(species, self.sc, self.medium.bus, self.state, rng,
-                      parent_group=self.agents_group)
+                      parent_group=self.agents_group, depth=depth)
         agent.behavior = create_behavior(agent, species)
         self.agents.append(agent)
         task = asyncio.create_task(agent.run())
@@ -180,32 +223,74 @@ class Ecosystem:
             raise ValueError(f"unknown species: {name}")
         count = max(1, min(16, int(count)))
         for _ in range(count):
-            self._spawn_agent(species)
+            self._spawn_agent(species, foreground=True)
         return count
 
-    def spawn_archetype(self, archetype: str, count: int = 1) -> dict:
+    def _mint_species(self, archetype: str):
+        """Mint a fresh species of an archetype from the biome's DNA + pitch set."""
+        from generation.derive import _derive_single_species
+        species = _derive_single_species(
+            archetype, self._adhoc_idx, self.biome.dna,
+            self.biome.pitch_set, random.Random(),
+        )
+        self._adhoc_idx += 1
+        self.biome.species.append(species)
+        return species
+
+    def _make_prominent(self, species):
+        """Tune a species to stand out: louder, foreground, and behaviourally
+        active (short rests / easy trigger) so a paid redeem is clearly heard."""
+        species.amp_boost = 1.6
+        species.depth_dist = "close"   # foreground, and stays so on respawn
+        p = species.params
+        a = species.archetype
+        if a == "caller":
+            p["base_pause"] = (0.2, 1.0)
+        elif a == "clicker":
+            p["wait_range"] = (0.1, 0.6)
+            p["rest_prob"] = 0.05
+        elif a == "swarm":
+            p["density"] = max(p.get("density", 20), 30)
+        elif a == "responder":
+            p["trigger_threshold"] = 0.5
+            p["cooldown"] = (1.5, 4.0)
+        # drone: continuous already; amp_boost + close depth is enough
+
+    def spawn_archetype(self, archetype: str, count: int = 1,
+                        prominent: bool = False) -> dict:
         """Spawn agent(s) of an archetype, independent of biome population.
-        Reuses an existing species of that archetype if the biome has one;
-        otherwise mints a fresh species from the biome's DNA + pitch set.
+
+        Default: reuse an existing species of that archetype (or mint one if
+        absent), foreground, one-shot (target unchanged).
+        prominent=True (paid redeems): always mint a FRESH species tuned loud +
+        active + foreground, and persist it as a standing voice (target=count).
         Returns {archetype, species, spawned}."""
         if archetype not in ARCHETYPES:
             raise ValueError(f"unknown archetype: {archetype}")
         count = max(1, min(16, int(count)))
 
+        if prominent:
+            species = self._mint_species(archetype)
+            self._make_prominent(species)
+            self.state.species_targets[species.name] = count  # persist (until TTL/cap)
+            for _ in range(count):
+                self._spawn_agent(species)  # depth_dist=close → foreground
+            # Track for time-limited retirement; enforce the concurrent cap now.
+            self._prominent.append({"name": species.name, "born": self._tick})
+            self._reap_prominent()
+            # nudge activity so responders react + the lair feels alive
+            self.bump_activity(2.0)
+            return {"archetype": archetype, "species": species.name,
+                    "spawned": count}
+
         species = next((sp for sp in self.biome.species
                         if sp.archetype == archetype), None)
         if species is None:
-            from generation.derive import _derive_single_species
-            species = _derive_single_species(
-                archetype, self._adhoc_idx, self.biome.dna,
-                self.biome.pitch_set, random.Random(),
-            )
-            self._adhoc_idx += 1
-            self.biome.species.append(species)
+            species = self._mint_species(archetype)
             self.state.species_targets.setdefault(species.name, 0)
 
         for _ in range(count):
-            self._spawn_agent(species)
+            self._spawn_agent(species, foreground=True)
         return {"archetype": archetype, "species": species.name, "spawned": count}
 
     def cull(self, name: str, count: int = 1) -> int:
